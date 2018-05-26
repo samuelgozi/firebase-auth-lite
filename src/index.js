@@ -75,17 +75,28 @@ export default class {
 	}
 
 	/*
+	 * Return the user session from the local storage.
+	 */
+	get session() {
+		const session = localStorage.getItem(this._sessionKey);
+		if(!session) return undefined;
+
+		// If there is a session, parse it.
+		return JSON.parse(session);
+	}
+
+	/*
 	 * Getter for the user info.
 	 * Removes unnecessary info from the user object
 	 * Returns undefined when no user is signed in.
 	 */
 	get user() {
-		let userData = localStorage.getItem(this._sessionKey);
-		if(!userData) return undefined;
+		const session = this.session;
+		// if there is no session then return undefined.
+		if(this.session === undefined) return undefined;
 
-		// If there is a user, then parse it, since its saved as JSON.
-		userData = JSON.parse(userData);
-		let {displayName, email, localId, registered} = userData;
-		return {displayName, email, localId, registered};
+		// If there is a session then create a new object only with the needed user info.
+		let { displayName, email, localId, registered } = session;
+		return { displayName, email, localId, registered };
 	}
 }

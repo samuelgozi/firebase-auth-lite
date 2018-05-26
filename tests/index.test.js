@@ -43,7 +43,6 @@ test('Removes session from the local storage after logging-out', () => {
 	expect(localStorage.getItem(auth._sessionKey)).toBeNull();
 });
 
-
 test("Returns 'undefined' when the user isn't logged in", () => {
 	const user = auth.user;
 
