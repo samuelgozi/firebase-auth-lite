@@ -19,12 +19,12 @@ test('Saves session into the LocalStorage after logging-in', () => {
 	expect.assertions(4);
 
 	return auth.signIn('test@test.com', '123456').then(() => {
-		const cookie = JSON.parse(localStorage.getItem(auth._sessionKey));
+		const session = JSON.parse(localStorage.getItem(auth._sessionKey));
 
-		expect(cookie).toBeDefined();
-		expect(cookie).toHaveProperty('email', 'test@test.com');
-		expect(cookie).toHaveProperty('kind', 'identitytoolkit#VerifyPasswordResponse');
-		expect(cookie).toHaveProperty('registered', true);
+		expect(session).toBeDefined();
+		expect(session).toHaveProperty('email', 'test@test.com');
+		expect(session).toHaveProperty('kind', 'identitytoolkit#VerifyPasswordResponse');
+		expect(session).toHaveProperty('registered', true);
 	});
 });
 

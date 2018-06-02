@@ -59,30 +59,94 @@ export default class {
 			}).then(handleRequestErrors).then(response => response.json());
 
 			// Calculate and add the expiration time of the token
-			authData.expirationTime = Number(authData.expiresIn) + requestTime * 1000;
-			// Save the session on localStorage
-			localStorage.setItem(this._sessionKey, JSON.stringify(authData));
+			authData.expirationDate = new Date(Number(authData.expiresIn) + requestTime * 1000);
+
+			// Save the session
+			this.saveSession(authData);
+
 		} catch (error) {
 			throw Error(getHumanReadableError(error));
 		}
 	}
 
 	/*
+	 * Exchange a refresh token for an ID token.
+	 * returns a promise.
+	 */
+	async refreshIdToken() {
+		const session = this.session;
+		if(session === undefined) throw Error('Can\'t refresh the ID token because no session has been found');
+
+		try {
+			let requestTime = Date.now(); // Used to calculate the expiration time of the token.
+			let refreshTokenData = await fetch(this._endpoints.token, {
+				method: 'POST',
+				body: JSON.stringify({ gran_token: 'refresh_token',refresh_token: session.refreshToken }),
+				headers: { 'Content-Type': 'application/json' }
+			}).then(handleRequestErrors).then(response => response.json());
+
+			// Calculate and add the expiration time of the token
+			refreshTokenData.expirationDate = new Date(Number(refreshTokenData.expires_in) + requestTime * 1000);
+
+			// Update the session.
+			this.updateSession(refreshTokenData);
+
+		} catch (error) {
+			throw Error(getHumanReadableError(error));
+		}
+	}
+
+	/*
+	 * Save the session to local storage and as property of this class for faster access.
+	 */
+	saveSession(session) {
+		// Check that the session has an "expiration time".
+		if(Object.prototype.toString.call(session.expirationDate) !== '[object Date]') throw Error('The session should have a valid expiration date');
+
+		// Save the session on memory(in this instance of the class)
+		this._session = session;
+
+		// Save the session on the local storage.
+		localStorage.setItem(this._sessionKey, JSON.stringify(session));
+	}
+
+	/*
+	 * Update the old session's ID and refresh tokens.
+	 */
+	updateSession(refreshTokenResponse) {
+		// Extract the data
+		let {expires_in: expiresIn, refresh_token: refreshToken, id_token: idToken } = refreshTokenResponse;
+
+		// Create a new object with the updated data.
+		const updatedSession = Object.assign(this.session, {expiresIn, refreshToken, idToken});
+
+		// Save the new session object.
+		this.saveSession(updatedSession);
+	}
+
+	/*
 	 * Remove the session data from the local storage.
 	 */
 	signOut() {
+		// Remove the session from memory.
+		this._session = undefined;
+
+		// Remove it from memory.
 		localStorage.removeItem(this._sessionKey);
 	}
 
 	/*
-	 * Return the user session from the local storage.
+	 * Return the user session from the local storage or from memory.
 	 */
 	get session() {
-		const session = localStorage.getItem(this._sessionKey);
+		// Try to get the session from memory, and if not set then try the local storage.
+		const session = this._session || JSON.parse(localStorage.getItem(this._sessionKey));
+
+		// If no session found, return undefined.
 		if(!session) return undefined;
 
-		// If there is a session, parse it.
-		return JSON.parse(session);
+		// If a session was found, return it.
+		return session;
 	}
 
 	/*
@@ -95,7 +159,7 @@ export default class {
 		// if there is no session then return undefined.
 		if(this.session === undefined) return undefined;
 
-		// If there is a session then create a new object only with the needed user info.
+		// If there is a session then create a new object with only the relevant info.
 		let { displayName, email, localId, registered } = session;
 		return { displayName, email, localId, registered };
 	}
