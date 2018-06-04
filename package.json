@@ -2,7 +2,7 @@
   "name": "firebase-auth-lite",
   "version": "0.1",
   "description": "A lightweight firebase auth alternative for the browser",
-  "main": "index.js",
+  "main": "src/index.js",
   "author": "Samuel Elgozi <samu.elgozi@gmail.com>",
   "license": "MIT",
   "scripts": {
@@ -24,5 +24,8 @@
       "jest-localstorage-mock",
       "jest-fetch-mock"
     ]
+  },
+  "dependencies": {
+    "npm": "^6.1.0"
   }
 }

@@ -1,7 +1,9 @@
 import errors from './errors';
 
-// Most of the info about the API can be found in the firebase docs
-// https://firebase.google.com/docs/reference/rest/auth/
+/*
+ * Most of the info about the API can be found in the firebase docs
+ * https://firebase.google.com/docs/reference/rest/auth/
+ */
 
 function getHumanReadableError(error) {
 	// First check if the user is connected to the internet(this is not always correct).
@@ -30,7 +32,6 @@ function handleRequestErrors(response) {
 	}
 	return response;
 }
-
 
 /*
  * The public API
