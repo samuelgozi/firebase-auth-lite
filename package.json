@@ -2,7 +2,7 @@
   "name": "firebase-auth-lite",
   "version": "0.1.0",
   "description": "A lightweight firebase auth alternative for the browser",
-  "main": "src/index.js",
+  "main": "dist/index.js",
   "author": "Samuel Elgozi <samu.elgozi@gmail.com>",
   "license": "MIT",
   "repository": {
