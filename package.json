@@ -5,10 +5,17 @@
   "main": "src/index.js",
   "author": "Samuel Elgozi <samu.elgozi@gmail.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/samuelgozi/firebase-auth-lite.git"
+  },
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "build": "rm -rf dist && babel src -d dist",
+    "prepublish": "npm run build"
   },
   "devDependencies": {
+    "babel-cli": "^6.26.0",
     "babel-core": "^6.26.3",
     "babel-jest": "^22.4.4",
     "babel-preset-env": "^1.7.0",
