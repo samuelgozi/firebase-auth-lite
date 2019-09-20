@@ -1,190 +1,239 @@
-import errors from './errors';
-
-/*
- * Most of the info about the API can be found in the firebase docs
- * https://firebase.google.com/docs/reference/rest/auth/
+/**
+ * Full documentation for the "identitytoolkit" API can be found here:
+ * https://developers.google.com/resources/api-libraries/documentation/identitytoolkit/v3/python/latest/identitytoolkit_v3.relyingparty.html
  */
+import humanReadableErrors from './errors';
 
 /**
- * Returns a human readable error for a error code.
- * @prop {string} error the error code from the rest API
- * @returns {string} human readable error.
- */
-function getHumanReadableError(error) {
-	// First check if the user is connected to the internet(this is not always correct).
-	if (!navigator.onLine) return 'You are not connected to the Internet.';
-
-	// Try to get the correct message(sometimes in different places).
-	let errorMessage = error.error ? error.error.message : error.message;
-
-	/*
-	 * Check if we have a more readable error for this error code in our language files.
-	 * If we do have one, return it, else return what we have.
-	 */
-	return errors[errorMessage] || errorMessage;
-}
-
-/*
- * The Fetch API throws only when there is a network connection issue, therefore
- * we need to manually check for the response status and throw an error ourselves.
+ * Handles errors and converts the
+ * response into an object and returns it.
  *
- * This function checks that that the response object returns with the 'ok' boolean set to true,
- * thats Fetch API's way of telling us that the response status is in the "successful" range.
+ * @prop {Response} response The raw response returned from the fetch API.
+ * @returns {Object} response data.
  */
-function handleRequestErrors(response) {
+async function handleIdentityToolkitResponse(response) {
+	const data = await res.json();
+
+	// If the response has an error, check to see if we have a human readable version of it,
+	// and throw that instead.
 	if (!response.ok) {
-		throw Error(response.statusText);
+		const code = error.error ? error.error.message : error.message;
+		throw Error(humanReadableErrors[code] || code);
 	}
-	return response;
+
+	return data;
 }
 
 /**
- * Authentication class.
- * Encapsulates logic for authentication and session
- * management.
+ * Class that represents a OpenID Connect federated login provider.
  *
- * @param {Object} config Firebase config object
- * @param {string} config.apiKey The aPI key fot this firebase project
- * @param {string} config.projectId   The project ID for this firebase project.
+ * @prop {Object} options
+ * @prop {string} options.provider The lowercased name of the provider(google/facebook/etc).
+ * @prop {string} options.redirectUri Uri to redirect to with the access_token.
+ * @prop {string} [options.customParams] Custom params for the request.
+ * @prop {string} [options.scope] Scope string for the federated provider.
+ * @prop {string} [options.endpoint] A Url endpoint for a custom provider.
  */
-export default class Auth {
-	constructor({ apiKey, projectId }) {
-		this._endpoints = {
-			signUp: 'https://www.googleapis.com/identitytoolkit/v3/relyingparty/signupNewUser?key=' + apiKey,
-			signIn: 'https://www.googleapis.com/identitytoolkit/v3/relyingparty/verifyPassword?key=' + apiKey,
-			token: 'https://securetoken.googleapis.com/v1/token?key=' + apiKey,
-			updateProfile: 'https://www.googleapis.com/identitytoolkit/v3/relyingparty/setAccountInfo?key=' + apiKey
+export class Provider {
+	constructor({ provider, redirectUri, customParams, scope, endpoint }) {
+		const allowedProviders = ['google', 'facebook', 'github', 'twitter'];
+		const defaultScopes = {
+			google: 'profile',
+			facebook: 'email'
 		};
-		this._sessionKey = projectId + ':' + apiKey;
+
+		// Validate the name.
+		if (!allowedProviders.includes(provider))
+			throw Error(
+				`"${provider}" Is not a valid provider name, The supported providers are "${allowedProviders.join(', ')}"`
+			);
+
+		// Validate that required params are not undefined.
+		if (redirectUri === undefined)
+			throw Error('Provider requires the "redirectUri" prop in order to create an instance.');
+
+		if (endpoint === undefined) throw Error('Provider requires the "redirectUri" prop in order to create an instance.');
+
+		this.endpoint = endpoint;
+		this.provider = provider;
+		this.redirectUri = redirectUri;
+		this.customParams = customParams;
+		this.scope = scope || defaultScopes[provider];
 	}
 
-	/*
-	 * Request a session ID from the REST API, then save it in local storage.
+	/**
+	 * Returns the authentication endpoint URI for the
+	 * federated provider with all the required settings
+	 * to proceed with the authentication.
 	 */
-	async signIn(email, password) {
-		try {
-			let requestTime = Date.now(); // Used to calculate the expiration time of the token.
-			let authData = await fetch(this._endpoints.signIn, {
-				method: 'POST',
-				body: JSON.stringify({ email, password, returnSecureToken: true }),
-				headers: { 'Content-Type': 'application/json' }
+	getAuthUri() {
+		return fetch(this.endpoint, {
+			method: 'POST',
+			body: JSON.stringify({
+				providerId: this.provider + '.com',
+				continueUri: this.redirectUri,
+				oauthScope: this.scope,
+				customParameter: this.customParams
 			})
-				.then(handleRequestErrors)
-				.then(response => response.json());
+		}).then(handleIdentityToolkitResponse);
+	}
+}
 
-			console.log(authData);
+export class AuthFlow {
+	constructor({ apiKey, redirectUri }) {
+		function getEndpoint(path) {
+			return `https://www.googleapis.com/identitytoolkit/v3/relyingparty/${path}?key=${apiKey}`;
+		}
 
-			// Calculate and add the expiration time of the token
-			authData.expirationDate = new Date(Number(authData.expiresIn) + requestTime * 1000);
+		if (redirectUri === undefined)
+			throw Error('AuthFlow requires the "redirectUri" prop in order to create an instance.');
 
-			// Save the session
-			this.saveSession(authData);
+		this.apiKey = apiKey;
+		this.redirectUri = redirectUri;
+		this.providers = {};
+		this.endpoints = {
+			token: `https://securetoken.googleapis.com/v1/token?key=${apiKey}`,
+			verifyCustomToken: getEndpoint('verifyCustomToken'),
+			signupNewUser: getEndpoint('signupNewUser'),
+			verifyPassword: getEndpoint('verifyPassword'),
+			verifyAssertion: getEndpoint('verifyAssertion'),
+			createAuthUri: getEndpoint('createAuthUri'),
+			getOobConfirmationCode: getEndpoint('getOobConfirmationCode'),
+			resetPassword: getEndpoint('resetPassword'),
+			setAccountInfo: getEndpoint('setAccountInfo'),
+			getAccountInfo: getEndpoint('getAccountInfo'),
+			deleteAccount: getEndpoint('deleteAccount')
+		};
+	}
+
+	// Adds a provider to the instance.
+	addProvider(conf) {
+		// If a redirectUri was not provided,
+		// try to use the redirectUri from the instance.
+		conf.redirectUri = conf.redirectUri || this.redirectUri;
+
+		// Set the endpoint for authUri generation.
+		conf.endpoint = conf.endpoint || this.endpoints.createAuthUri;
+
+		// Add the provider to the providers list.
+		this.providers[conf.provider] = new Provider(conf);
+	}
+
+	// Verify a returned access token from an OAuth callback.
+	// Returns the access token or an error.
+	async exchangeCodeForToken(requestUri, sessionId) {
+		return fetch(this.endpoints.verifyAssertion, {
+			method: 'POST',
+			body: JSON.stringify({
+				requestUri,
+				sessionId,
+				returnIdpCredential: true,
+				returnSecureToken: true
+			})
+		}).then(handleIdentityToolkitResponse);
+	}
+
+	// Exchange a refresh token for an id token.
+	async refreshIdToken(refreshToken = this.user.refreshToken) {
+		const response = await fetch(this.endpoints.token, {
+			method: 'POST',
+			body: JSON.stringify({
+				grant_type: 'refresh_token',
+				refresh_token: refreshToken
+			})
+		}).then(handleIdentityToolkitResponse);
+
+		// Rename the data names to match the ones used in the app.
+		const newSessionData = {
+			oauthAccessToken: response.access_token,
+			idToken: response.id_token,
+			refreshToken: response.refresh_token
+		};
+
+		// Merge the new data with the old data and save it locally.
+		this.persistSession({ ...this.user, ...newSessionData });
+
+		// Return the new access token
+		return newSessionData;
+	}
+
+	// Start auth flow of a federated id provider.
+	async startOauthFlow(providerName, localRedirectUri) {
+		// Get an array of the allowed providers names.
+		const allowedProviders = Object.keys(this.providers);
+
+		// Verify that the requested provider is indeed configured.
+		if (!allowedProviders.includes(providerName))
+			throw Error(`"${providerName}" is not configured in this instance AuthFlow`);
+
+		try {
+			// Get the url and other data necessary for the authentication.
+			const { authUri, sessionId } = await this.providers[providerName].getAuthUri();
+
+			// If the argument redirectUri was passed, then save it in sessionStorage.
+			// This is not the redirectUri sent to the Provider, this is an internal redirectUri
+			// used internally for routing within the app after the Authorization was performed.
+			if (localRedirectUri) sessionStorage.setItem(`Auth:Redirect:${this.apiKey}`, localRedirectUri);
+			// Save the sessionId that we just received in the local storage.
+			sessionStorage.setItem(`Auth:SessionId:${this.apiKey}`, sessionId);
+
+			// Finally - redirect the page to the auth endpoint.
+			location.href = authUri;
 		} catch (error) {
-			throw Error(getHumanReadableError(error));
+			// If it failed to initialize the Auth flow for any reason,
+			// remove all the temporary objects from the sessionStorage.
+			sessionStorage.removeItem(`Auth:Redirect:${this.apiKey}`);
+			sessionStorage.removeItem(`Auth:SessionId:${this.apiKey}`);
+
+			// Throw the error.
+			throw error;
 		}
 	}
 
-	/*
-	 * Exchange a refresh token for an ID token.
-	 * returns a promise.
-	 */
-	async refreshIdToken() {
-		const session = this.session;
-		if (session === undefined) throw Error("Can't refresh the ID token because no session has been found");
+	// Saves the credentials along with the access token and id token in localStorage.
+	persistSession(credentials) {
+		localStorage.setItem(`Auth:User:${this.apiKey}`, JSON.stringify(credentials));
 
-		try {
-			let requestTime = Date.now(); // Used to calculate the expiration time of the token.
-			let refreshTokenData = await fetch(this._endpoints.token, {
-				method: 'POST',
-				body: JSON.stringify({
-					gran_token: 'refresh_token',
-					refresh_token: session.refreshToken
-				}),
-				headers: { 'Content-Type': 'application/json' }
-			})
-				.then(handleRequestErrors)
-				.then(response => response.json());
-
-			// Calculate and add the expiration time of the token
-			refreshTokenData.expirationDate = new Date(Number(refreshTokenData.expires_in) + requestTime * 1000);
-
-			// Update the session.
-			this.updateSession(refreshTokenData);
-		} catch (error) {
-			throw Error(getHumanReadableError(error));
-		}
+		// Clear the cache from memory
+		this._user = null;
 	}
 
-	/*
-	 * Save the session to local storage and as property of this class for faster access.
+	/**
+	 * This code runs after the Federated Id Provider
+	 * returned the auth Code to our page, and exchanges it with
+	 * User info, Access Token and ID token.
 	 */
-	saveSession(session) {
-		// Check that the session has an "expiration time".
-		if (Object.prototype.toString.call(session.expirationDate) !== '[object Date]')
-			throw Error('The session should have a valid expiration date');
+	async finishOauthFlow(responseUrl = window.location.href) {
+		// Get the local redirect URI if it exists.
+		const redirectUri = sessionStorage.getItem(`Auth:Redirect:${this.apiKey}`);
+		// Get the sessionId we received before the redirect from sessionStorage.
+		const sessionId = sessionStorage.getItem(`Auth:SessionId:${this.apiKey}`);
 
-		// Save the session on memory(in this instance of the class)
-		this._session = session;
+		// Try to exchange the Auth Code for Token and user
+		// data and save the data to the local storage.
+		const userData = await this.exchangeCodeForToken(responseUrl, sessionId);
+		this.persistSession(userData);
 
-		// Save the session on the local storage.
-		localStorage.setItem(this._sessionKey, JSON.stringify(session));
+		// Now clean up the temporary objects from the local storage.
+		// This includes the sessionId and the local redirectURI.
+		sessionStorage.removeItem(`Auth:Redirect:${this.apiKey}`);
+		sessionStorage.removeItem(`Auth:SessionId:${this.apiKey}`);
+
+		// If a local redirect uri was set, redirect to it
+		// else, just get rid of the params in the location bar.
+		window.location.href = redirectUri || location.origin + location.pathname;
 	}
 
-	/*
-	 * Update the old session's ID and refresh tokens.
-	 */
-	updateSession(refreshTokenResponse) {
-		// Extract the data
-		let { expires_in: expiresIn, refresh_token: refreshToken, id_token: idToken } = refreshTokenResponse;
-
-		// Create a new object with the updated data.
-		const updatedSession = Object.assign(this.session, {
-			expiresIn,
-			refreshToken,
-			idToken
-		});
-
-		// Save the new session object.
-		this.saveSession(updatedSession);
-	}
-
-	/*
-	 * Remove the session data from the local storage.
-	 */
+	// Remove the session info from the localStorage.
 	signOut() {
-		// Remove the session from memory.
-		this._session = undefined;
-
-		// Remove it from memory.
-		localStorage.removeItem(this._sessionKey);
+		localStorage.removeItem(`Auth:User:${this.apiKey}`);
 	}
 
-	/*
-	 * Return the user session from the local storage or from memory.
-	 */
-	get session() {
-		// Try to get the session from memory, and if not set then try the local storage.
-		const session = this._session || JSON.parse(localStorage.getItem(this._sessionKey));
-
-		// If no session found, return undefined.
-		if (!session) return undefined;
-
-		// If a session was found, return it.
-		return session;
-	}
-
-	/*
-	 * Getter for the user info.
-	 * Removes unnecessary info from the user object
-	 * Returns undefined when no user is signed in.
-	 */
 	get user() {
-		const session = this.session;
-		// if there is no session then return undefined.
-		if (this.session === undefined) return undefined;
+		if (!this._user) {
+			this._user = JSON.parse(localStorage.getItem(`Auth:User:${this.apiKey}`));
+		}
 
-		// If there is a session then create a new object with only the relevant info.
-		let { displayName, email, localId, registered } = session;
-		return { displayName, email, localId, registered };
+		return this._user;
 	}
 }
