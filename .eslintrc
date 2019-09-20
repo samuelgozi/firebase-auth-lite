@@ -8,16 +8,14 @@
     "ecmaVersion": 2017,
     "sourceType": "module"
   },
-  "extends": [
-    "eslint:recommended",
-    "plugin:jest/recommended"
-  ],
-  "plugins": ["jest"],
+  "extends": ["eslint:recommended", "plugin:jest/recommended"],
   "rules": {
     "no-console": ["error", { "allow": ["error"] }],
     "indent": ["error", "tab", { "SwitchCase": 1 }],
     "linebreak-style": ["error", "unix"],
     "quotes": ["error", "single", { "avoidEscape": true }],
-    "semi": ["error", "always"]
-  }
+    "semi": ["error", "always"],
+    "no-mixed-spaces-and-tabs": ["warn", "smart-tabs"]
+  },
+  "plugins": ["babel", "jest"]
 }
