@@ -25,16 +25,18 @@ async function handleIdentityToolkitResponse(response) {
 }
 
 /**
- * Class that represents a OpenID Connect federated login provider.
- *
- * @prop {Object} options
- * @prop {string} options.provider The lowercased name of the provider(google/facebook/etc).
- * @prop {string} options.redirectUri Uri to redirect to with the access_token.
- * @prop {string} [options.customParams] Custom params for the request.
- * @prop {string} [options.scope] Scope string for the federated provider.
- * @prop {string} [options.endpoint] A Url endpoint for a custom provider.
+ * Class representing an OpenID Connect federated login provider.
  */
 export class Provider {
+	/**
+	 * Create a service provider object, to use in a Auth flow instance.
+	 * @prop {Object} options
+	 * @prop {string} options.provider The lowercased name of the provider(google/facebook/etc).
+	 * @prop {string} options.redirectUri Uri to redirect to with the access_token.
+	 * @prop {string} [options.customParams] Custom params for the request.
+	 * @prop {string} [options.scope] Scope string for the federated provider.
+	 * @prop {string} [options.endpoint] A Url endpoint for a custom provider.
+	 */
 	constructor({ provider, redirectUri, customParams, scope, endpoint }) {
 		const allowedProviders = ['google', 'facebook', 'github', 'twitter'];
 		const defaultScopes = {
