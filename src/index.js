@@ -12,7 +12,7 @@ import humanReadableErrors from './errors';
  * @returns {Object} response data.
  */
 async function handleIdentityToolkitResponse(response) {
-	const data = await res.json();
+	const data = await response.json();
 
 	// If the response has an error, check to see if we have a human readable version of it,
 	// and throw that instead.
@@ -35,7 +35,7 @@ export class Provider {
 	 * @prop {string} options.redirectUri Uri to redirect to with the access_token.
 	 * @prop {string} [options.customParams] Custom params for the request.
 	 * @prop {string} [options.scope] Scope string for the federated provider.
-	 * @prop {string} [options.endpoint] A Url endpoint for a custom provider.
+	 * @prop {string} options.endpoint A Url endpoint for a custom provider.
 	 */
 	constructor({ provider, redirectUri, customParams, scope, endpoint }) {
 		const allowedProviders = ['google', 'facebook', 'github', 'twitter'];
