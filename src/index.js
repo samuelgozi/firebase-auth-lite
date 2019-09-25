@@ -17,7 +17,7 @@ async function handleIdentityToolkitResponse(response) {
 	// If the response has an error, check to see if we have a human readable version of it,
 	// and throw that instead.
 	if (!response.ok) {
-		const code = error.error ? error.error.message : error.message;
+		const code = data.error.error ? data.error.error.message : data.error.message;
 		throw Error(humanReadableErrors[code] || code);
 	}
 
@@ -205,7 +205,7 @@ export class AuthFlow {
 	 * returned the auth Code to our page, and exchanges it with
 	 * User info, Access Token and ID token.
 	 */
-	async finishOauthFlow(responseUrl = window.location.href) {
+	async finishOauthFlow(responseUrl = location.href) {
 		// Get the local redirect URI if it exists.
 		const redirectUri = sessionStorage.getItem(`Auth:Redirect:${this.apiKey}`);
 		// Get the sessionId we received before the redirect from sessionStorage.
@@ -223,7 +223,7 @@ export class AuthFlow {
 
 		// If a local redirect uri was set, redirect to it
 		// else, just get rid of the params in the location bar.
-		window.location.href = redirectUri || location.origin + location.pathname;
+		location.href = redirectUri || location.origin + location.pathname;
 	}
 
 	// Remove the session info from the localStorage.
