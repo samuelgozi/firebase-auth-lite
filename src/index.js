@@ -229,9 +229,11 @@ export class AuthFlow {
 	// Remove the session info from the localStorage.
 	signOut() {
 		localStorage.removeItem(`Auth:User:${this.apiKey}`);
+		this._user = undefined;
 	}
 
 	get user() {
+		// check if wa cached it before, and if we didn't, the do.
 		if (!this._user) {
 			this._user = JSON.parse(localStorage.getItem(`Auth:User:${this.apiKey}`));
 		}
