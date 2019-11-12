@@ -17,8 +17,7 @@ async function handleIdentityToolkitResponse(response) {
 	// If the response has an error, check to see if we have a human readable version of it,
 	// and throw that instead.
 	if (!response.ok) {
-		const code = data.error.error ? data.error.error.message : data.error.message;
-		throw Error(humanReadableErrors[code] || code);
+		throw Error(humanReadableErrors[data.error.message] || data.error.message);
 	}
 
 	return data;
@@ -84,7 +83,7 @@ export class Provider {
 export class AuthFlow {
 	constructor({ apiKey, redirectUri }) {
 		function getEndpoint(path) {
-			return `https://www.googleapis.com/identitytoolkit/v3/relyingparty/${path}?key=${apiKey}`;
+			return `https://identitytoolkit.googleapis.com/v1/accounts:${path}?key=${apiKey}`;
 		}
 
 		if (redirectUri === undefined)
@@ -95,16 +94,16 @@ export class AuthFlow {
 		this.providers = {};
 		this.endpoints = {
 			token: `https://securetoken.googleapis.com/v1/token?key=${apiKey}`,
-			verifyCustomToken: getEndpoint('verifyCustomToken'),
-			signupNewUser: getEndpoint('signupNewUser'),
-			verifyPassword: getEndpoint('verifyPassword'),
-			verifyAssertion: getEndpoint('verifyAssertion'),
+			signUp: getEndpoint('signUp'),
+			signInWithCustomToken: getEndpoint('signInWithCustomToken'),
+			signInWithPassword: getEndpoint('signInWithPassword'),
+			signInWithIdp: getEndpoint('signInWithIdp'),
 			createAuthUri: getEndpoint('createAuthUri'),
-			getOobConfirmationCode: getEndpoint('getOobConfirmationCode'),
+			sendOobCode: getEndpoint('sendOobCode'),
 			resetPassword: getEndpoint('resetPassword'),
-			setAccountInfo: getEndpoint('setAccountInfo'),
-			getAccountInfo: getEndpoint('getAccountInfo'),
-			deleteAccount: getEndpoint('deleteAccount')
+			update: getEndpoint('update'),
+			lookup: getEndpoint('lookup'),
+			delete: getEndpoint('delete')
 		};
 	}
 
@@ -119,20 +118,6 @@ export class AuthFlow {
 
 		// Add the provider to the providers list.
 		this.providers[conf.provider] = new Provider(conf);
-	}
-
-	// Verify a returned access token from an OAuth callback.
-	// Returns the access token or an error.
-	async exchangeCodeForToken(requestUri, sessionId) {
-		return fetch(this.endpoints.verifyAssertion, {
-			method: 'POST',
-			body: JSON.stringify({
-				requestUri,
-				sessionId,
-				returnIdpCredential: true,
-				returnSecureToken: true
-			})
-		}).then(handleIdentityToolkitResponse);
 	}
 
 	// Exchange a refresh token for an id token.
@@ -213,7 +198,18 @@ export class AuthFlow {
 
 		// Try to exchange the Auth Code for Token and user
 		// data and save the data to the local storage.
-		const userData = await this.exchangeCodeForToken(responseUrl, sessionId);
+		const userData = await fetch(this.endpoints.signInWithIdp, {
+			method: 'POST',
+			body: JSON.stringify({
+				requestUri: responseUrl,
+				sessionId,
+				returnIdpCredential: true,
+				returnSecureToken: true
+			})
+		}).then(handleIdentityToolkitResponse);
+
+		// console.log(await fetch(this.endpoint));
+
 		this.persistSession(userData);
 
 		// Now clean up the temporary objects from the local storage.
@@ -239,5 +235,13 @@ export class AuthFlow {
 		}
 
 		return this._user;
+	}
+
+	/**
+	 * Adds authorization headers to a Native Request Object.
+	 * @param {Request} request
+	 */
+	authorizeRequest(request) {
+		request.headers.set('Authorization', `Bearer ${this.user.idToken}`);
 	}
 }
