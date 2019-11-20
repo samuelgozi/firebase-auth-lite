@@ -24,18 +24,20 @@ async function handleIdentityToolkitResponse(response) {
 }
 
 /**
- * Class representing an OpenID Connect federated login provider.
+ * Allowed types for the "from" option.
+ * @typedef {Object} ProviderOptions
+ * @prop {string} provider The lower-cased name of the provider(google/facebook/etc).
+ * @prop {string} redirectUri Uri to redirect to with the access_token.
+ * @prop {string} [customParams] Custom params for the request.
+ * @prop {string} [scope] Scope string for the federated provider.
+ * @prop {string} endpoint A Url endpoint for a custom provider.
  */
-export class Provider {
-	/**
-	 * Create a service provider object, to use in a Auth flow instance.
-	 * @prop {Object} options
-	 * @prop {string} options.provider The lowercased name of the provider(google/facebook/etc).
-	 * @prop {string} options.redirectUri Uri to redirect to with the access_token.
-	 * @prop {string} [options.customParams] Custom params for the request.
-	 * @prop {string} [options.scope] Scope string for the federated provider.
-	 * @prop {string} options.endpoint A Url endpoint for a custom provider.
-	 */
+
+/**
+ * Encapsulates Federated identity configuration and logic.
+ * @prop {ProviderOptions} options
+ */
+class Provider {
 	constructor({ provider, redirectUri, customParams, scope, endpoint }) {
 		const allowedProviders = ['google', 'facebook', 'github', 'twitter'];
 		const defaultScopes = {
@@ -80,14 +82,20 @@ export class Provider {
 	}
 }
 
+/**
+ * Encapsulates authentication logic.
+ * @param {Object} options Options object.
+ * @param {string} options.apiKey The firebase API key
+ * @param {string} options.redirectUri The URL to redirect to after signIn.
+ * @param {Array.<ProviderOptions|string>} options.providers Array of arguments that will be passed to the addProvider method.
+ */
 export class AuthFlow {
-	constructor({ apiKey, redirectUri }) {
+	constructor({ apiKey, redirectUri, providers }) {
+		if (!redirectUri) throw Error('The argument "redirectUri" is required');
+
 		function getEndpoint(path) {
 			return `https://identitytoolkit.googleapis.com/v1/accounts:${path}?key=${apiKey}`;
 		}
-
-		if (redirectUri === undefined)
-			throw Error('AuthFlow requires the "redirectUri" prop in order to create an instance.');
 
 		this.apiKey = apiKey;
 		this.redirectUri = redirectUri;
@@ -105,43 +113,68 @@ export class AuthFlow {
 			lookup: getEndpoint('lookup'),
 			delete: getEndpoint('delete')
 		};
+
+		if (providers) {
+			if (!Array.isArray(providers)) throw Error('The argument "providers" should be an array');
+			providers.forEach(options => this.addProvider(options));
+		}
+
+		// If the user is already logged, then it will be his data, else it'll be null.
+		this.user = JSON.parse(localStorage.getItem(`Auth:User:${this.apiKey}`));
 	}
 
-	// Adds a provider to the instance.
-	addProvider(conf) {
-		// If a redirectUri was not provided,
-		// try to use the redirectUri from the instance.
-		conf.redirectUri = conf.redirectUri || this.redirectUri;
+	// Saves the credentials along with the access token and id token in localStorage.
+	persistSession(credentials) {
+		localStorage.setItem(`Auth:User:${this.apiKey}`, JSON.stringify(credentials));
+		this.user = credentials;
+	}
 
-		// Set the endpoint for authUri generation.
-		conf.endpoint = conf.endpoint || this.endpoints.createAuthUri;
+	// Remove the session info from the localStorage.
+	signOut() {
+		localStorage.removeItem(`Auth:User:${this.apiKey}`);
+		this.user = null;
+	}
 
-		// Add the provider to the providers list.
-		this.providers[conf.provider] = new Provider(conf);
+	/**
+	 * Adds authorization headers to a Native Request Object.
+	 * @param {Request} request
+	 */
+	authorizeRequest(request) {
+		if (this.user !== null) request.headers.set('Authorization', `Bearer ${this.user.idToken}`);
 	}
 
 	// Exchange a refresh token for an id token.
-	async refreshIdToken(refreshToken = this.user.refreshToken) {
+	async refreshIdToken() {
 		const response = await fetch(this.endpoints.token, {
 			method: 'POST',
 			body: JSON.stringify({
 				grant_type: 'refresh_token',
-				refresh_token: refreshToken
+				refresh_token: this.user.refreshToken
 			})
 		}).then(handleIdentityToolkitResponse);
 
-		// Rename the data names to match the ones used in the app.
-		const newSessionData = {
+		// Merge the new data with the old data and save it locally.
+		this.persistSession({
+			...this.user,
+
+			// Rename the data names to match the ones used in the app.
 			oauthAccessToken: response.access_token,
 			idToken: response.id_token,
 			refreshToken: response.refresh_token
-		};
+		});
+	}
 
-		// Merge the new data with the old data and save it locally.
-		this.persistSession({ ...this.user, ...newSessionData });
-
-		// Return the new access token
-		return newSessionData;
+	/**
+	 * Adds a provider to the AuthFlow instance.
+	 * @param {(ProviderOptions|string)} options Can be an options object, or a string representing the name of a provider.
+	 */
+	addProvider(options) {
+		if (typeof options === 'string') options = { provider: options };
+		this.providers[options.provider] = new Provider({
+			redirectUri: this.redirectUri,
+			endpoint: this.endpoints.createAuthUri,
+			...options
+		});
 	}
 
 	// Start auth flow of a federated id provider.
@@ -175,14 +208,6 @@ export class AuthFlow {
 			// Throw the error.
 			throw error;
 		}
-	}
-
-	// Saves the credentials along with the access token and id token in localStorage.
-	persistSession(credentials) {
-		localStorage.setItem(`Auth:User:${this.apiKey}`, JSON.stringify(credentials));
-
-		// Clear the cache from memory
-		this._user = null;
 	}
 
 	/**
@@ -220,28 +245,5 @@ export class AuthFlow {
 		// If a local redirect uri was set, redirect to it
 		// else, just get rid of the params in the location bar.
 		location.href = redirectUri || location.origin + location.pathname;
-	}
-
-	// Remove the session info from the localStorage.
-	signOut() {
-		localStorage.removeItem(`Auth:User:${this.apiKey}`);
-		this._user = undefined;
-	}
-
-	get user() {
-		// check if wa cached it before, and if we didn't, the do.
-		if (!this._user) {
-			this._user = JSON.parse(localStorage.getItem(`Auth:User:${this.apiKey}`));
-		}
-
-		return this._user;
-	}
-
-	/**
-	 * Adds authorization headers to a Native Request Object.
-	 * @param {Request} request
-	 */
-	authorizeRequest(request) {
-		request.headers.set('Authorization', `Bearer ${this.user.idToken}`);
 	}
 }
