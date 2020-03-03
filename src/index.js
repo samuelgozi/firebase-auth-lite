@@ -148,7 +148,8 @@ export class AuthFlow {
 		if (this.user !== null) {
 			// If the token already expired,
 			// then refresh it and only after that add authorization headers.
-			if (this.user.expiresAt < Date.now()) await this.refreshIdToken();
+			// Will also run if "expiresAt" doesn't exist at all, remove this in about a month.
+			if (this.user.expiresAt < Date.now() || this.user.expiresAt === undefined) await this.refreshIdToken();
 			request.headers.set('Authorization', `Bearer ${this.user.idToken}`);
 		}
 
