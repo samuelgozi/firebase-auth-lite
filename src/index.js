@@ -136,11 +136,23 @@ export class AuthFlow {
 	}
 
 	/**
-	 * Adds authorization headers to a Native Request Object.
-	 * @param {Request} request
+	 * Uses native fetch, but adds authorization headers
+	 * if the Reference was instantiated with an auth instance.
+	 * The API is exactly the same as native fetch.
+	 * @param {Request|Object|string} resource the resource to send the request to, or an options object.
+	 * @param {Object} init an options object.
 	 */
-	authorizeRequest(request) {
-		if (this.user !== null) request.headers.set('Authorization', `Bearer ${this.user.idToken}`);
+	async authorizedRequest(resource, init) {
+		const request = resource instanceof Request ? resource : new Request(resource, init);
+
+		if (this.user !== null) {
+			// If the token already expired,
+			// then refresh it and only after that add authorization headers.
+			if (this.user.expiresAt < Date.now()) await this.refreshIdToken();
+			request.headers.set('Authorization', `Bearer ${this.user.idToken}`);
+		}
+
+		return fetch(request);
 	}
 
 	// Exchange a refresh token for an id token.
@@ -160,7 +172,8 @@ export class AuthFlow {
 			// Rename the data names to match the ones used in the app.
 			oauthAccessToken: response.access_token,
 			idToken: response.id_token,
-			refreshToken: response.refresh_token
+			refreshToken: response.refresh_token,
+			expiresAt: Date.now() + response.expires_in * 1000
 		});
 	}
 
@@ -233,9 +246,11 @@ export class AuthFlow {
 			})
 		}).then(handleIdentityToolkitResponse);
 
-		// console.log(await fetch(this.endpoint));
-
-		this.persistSession(userData);
+		this.persistSession({
+			...userData,
+			// Add timestamp for the expiration date of the object.
+			expiresAt: Date.now() + userData.expiresIn * 1000
+		});
 
 		// Now clean up the temporary objects from the local storage.
 		// This includes the sessionId and the local redirectURI.
