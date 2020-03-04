@@ -93,7 +93,6 @@ function signIn() {
 	// The one there is used to finish the Oauth flow, and it has to
 	// be whitelisted from the federated provider settings.
 	auth.startOauthFlow('google', location.origin);
-	awaitingRedirect = true;
 }
 
 // For example on click on a button
@@ -137,7 +136,6 @@ function signIn() {
 	// The one there is used to finish the Oauth flow, and it has to
 	// be whitelisted from the federated provider settings.
 	auth.startOauthFlow('google', location.origin);
-	awaitingRedirect = true;
 }
 
 // For example on click on a button
