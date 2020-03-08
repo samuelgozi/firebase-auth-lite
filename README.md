@@ -1,27 +1,54 @@
 # Firebase auth lite (WIP!)
 
-The Official Firebase SDKs for Javascript are too big and can make it very hard for developers to achieve standard loading times, and if you are like me and strive to provide the best performance for you users, its impossible to provide good loading times for smartphones over 3G networks due to its big size.
+The Official Firebase SDKs for Javascript are too big and can make it very hard for developers to achieve recommended loading times, and if you are like me and strive to provide the best performance for you users, its impossible to do on smartphones over 3G networks due to its big size.
 
 I took it upon myself to provide an alternative SDK for when bad performance is just not an option. I'm currently working on libraries for Auth(this one), Firestore, and Storage.
 
 The main goal of these libraries is to be as lean as possible, and provide close to full functionality, but if it comes at the cost of performance or size, I will most likely choose to stick to lower level functionality over features count. One example for that will be IE11 and browsers that don't support ES5. I wont try to support them because they require heavy pollyfils, and are dying anyways.
 
-## Whats the difference between this and the official SKD?
+[My Alternative SDK performs in average 13 times better and is 27 times smaller than the official ones](https://github.com/samuelgozi/firebase-firestore-lite/wiki/Firebase-Alternative-SDK-Benchmarks).
 
-The long term goal for this library is to provide full functionality, with size and performance as its guiding principles. The API will not be identical or even close to the official one, but the core functionality will be the same.
+## What else do I need to consider?
+
+The API will not be identical or even close to the official one, but the core functionality will be the same.
 
 Before you decide if this lib is for you please consider:
 
 1. This is still work in progress!
-2. Currently only Oauth authentication is supported.
-3. When adding a provider, or when using Google you will have to whitelist Redirect URLs manually.
+2. Currently only Oauth authentication is supported(Take a look ath the roadmap for a more detailed list).
+3. When adding a provider, or when using Google you will have to whitelist Redirect URLs manually(According to the OpenId Connect, thats how its supposed to be).
 4. Sessions can only be persisted in localStorage(More options will be added).
-5. Works only on browsers that support ES5, localStorage, Fetch API. Sorry IE11.
-6. Not tested yet(I don't have a good testing strategy yet...)
+5. Works only on browsers that support ES5, localStorage and Fetch API.
+6. Not fully tested yet(I don't have a good testing strategy yet...)
 
 ## Is performance in the official JS SDK really that bad?
 
 Short answer: yes. But the full answer is, that it depends on you project. If you want to know more details, please read my post on the Firebase google group: https://groups.google.com/forum/#!topic/firebase-talk/F0NenvOEYrE
+
+## Roadmap
+
+- [ ] Exchange custom token for an ID and refresh token
+- [x] Exchange a refresh token for an ID token
+- [ ] Sign up with email / password
+- [ ] Sign in with email / password
+- [ ] Sign in anonymously
+- [x] Sign in with OAuth credential
+- [ ] Fetch providers for email
+- [ ] Send password reset email
+- [ ] Verify password reset code
+- [ ] Confirm password reset
+- [ ] Change email
+- [ ] Change password
+- [ ] Update profile
+- [ ] Get user data
+- [ ] Link with email/password
+- [ ] Link with OAuth credential
+- [ ] Unlink provider
+- [ ] Send email verification
+- [ ] Confirm email verification
+- [ ] Delete account
+
+It might seem like very little progress was made, but the biggest feature is "Sign in with Oauth", all the rest are just HTTP requests. So hopefully progress will be made swiftly with the rest of the features.
 
 ## How to install and use.
 
@@ -71,7 +98,7 @@ There is one gotcha to using this library, when you add a Sign-in provider throu
 I considered fixing this, but it makes the sign in considerably slower, and you need to add the link provided by firebase anyways. The case in which firebase will automatically add their authorized URL is when using Google as a provider. And you can add it from the GCP console here:
 https://console.developers.google.com/apis/credentials
 
-Another reason I didn't fix this is because I believe its a little bit more secure when you have to add them manually. I read the OpenID connect standard, the the reason for the existence of the restriction to only redirect to whitelisted domains exists for that reason.
+Another reason I didn't fix this is because I believe its a little bit more secure when you have to add them explicitly. According to the OpenID connect standard, that is the reason for the existence of the restriction to only redirect to whitelisted domains.
 
 #### 2. Begin authentication flow
 
@@ -150,4 +177,4 @@ if (new URL(location.href).searchParams.has('code')) {
 
 # Full API Reference
 
-A full API reference will be written, but the API is not yet finished so im not in a rush.
+A full API reference will be written when most of the features will be done. But the current guide covers most of what is done al ready.
