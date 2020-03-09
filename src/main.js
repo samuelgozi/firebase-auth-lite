@@ -85,7 +85,7 @@ class Provider {
 }
 
 /**
- * Encapsulates authentication logic.
+ * Encapsulates authentication flow logic.
  * @param {Object} options Options object.
  * @param {string} options.apiKey The firebase API key
  * @param {string} options.redirectUri The URL to redirect to after signIn.
@@ -126,7 +126,7 @@ export class AuthFlow {
 	}
 
 	/**
-	 * Saves the credentials along with the access token and id token in localStorage.
+	 * Saves the user data in the local storage.
 	 * @param {Object} credentials
 	 * @private
 	 */
@@ -146,7 +146,7 @@ export class AuthFlow {
 	}
 
 	/**
-	 * Gets the latest user profile data, and persists it locally.
+	 * Gets the user data from the server, and updates the local caches.
 	 * @param {Object} [tokenManager] Only when not logged in.
 	 * @returns {Object}
 	 */
@@ -168,32 +168,16 @@ export class AuthFlow {
 	}
 
 	/**
-	 * Uses native fetch, but adds authorization headers
-	 * The API is exactly the same as native fetch.
-	 * @param {Request|Object|string} resource the resource to send the request to, or an options object.
-	 * @param {Object} init an options object.
-	 */
-	async authorizedRequest(resource, init) {
-		const request = resource instanceof Request ? resource : new Request(resource, init);
-
-		if (this.user !== null) {
-			// If the token already expired,
-			// then refresh it and only after that add authorization headers.
-			if (this.user.tokenManager.expiresAt < Date.now()) await this.refreshIdToken();
-			request.headers.set('Authorization', `Bearer ${this.user.tokenManager.idToken}`);
-		}
-
-		return fetch(request);
-	}
-
-	/**
 	 * Refreshes the idToken by using the locally stored refresh token.
 	 * @private
 	 */
 	async refreshIdToken() {
+		// If a request for a new token was already made, then wait for it and then return.
+		if (this.refreshTokenRequest) return await this.refreshTokenRequest;
+
 		// Calculated expiration time for the new token.
 		const expiresAt = Date.now() + 3600 * 1000;
-		const response = await fetch(this.endpoints.token, {
+		const { id_token: idToken, refresh_token: refreshToken } = await fetch(this.endpoints.token, {
 			method: 'POST',
 			body: JSON.stringify({
 				grant_type: 'refresh_token',
@@ -205,12 +189,26 @@ export class AuthFlow {
 		this.persistSession({
 			...this.user,
 			// Rename the data names to match the ones used in the app.
-			tokenManager: {
-				idToken: response.id_token,
-				refreshToken: response.refresh_token,
-				expiresAt
-			}
+			tokenManager: { idToken, refreshToken, expiresAt }
 		});
+	}
+
+	/**
+	 * Uses native fetch, but adds authorization headers
+	 * The API is exactly the same as native fetch.
+	 * @param {Request|Object|string} resource the resource to send the request to, or an options object.
+	 * @param {Object} init an options object.
+	 */
+	async authorizedRequest(resource, init) {
+		const request = resource instanceof Request ? resource : new Request(resource, init);
+
+		if (this.user !== null) {
+			// Check if the token expired. If it did, refresh it.
+			if (this.user.tokenManager.expiresAt < Date.now()) await this.refreshIdToken();
+			request.headers.set('Authorization', `Bearer ${this.user.tokenManager.idToken}`);
+		}
+
+		return fetch(request);
 	}
 
 	/**
@@ -238,7 +236,7 @@ export class AuthFlow {
 
 		// Verify that the requested provider is indeed configured.
 		if (!allowedProviders.includes(providerName))
-			throw Error(`"${providerName}" is not configured in this instance AuthFlow`);
+			throw Error(`You haven't configured "${providerName}" with this AuthFlow instance.`);
 
 		try {
 			// Get the url and other data necessary for the authentication.
@@ -319,7 +317,7 @@ export class AuthFlow {
 	async signUpWithPassword(email = '', password = '') {
 		// Calculate the expiration date for the idToken.
 		const expiresAt = Date.now() + 3600 * 1000;
-		const { id_token: idToken, refresh_token: refreshToken } = await fetch(this.endpoints.signUp, {
+		const { idToken, refreshToken } = await fetch(this.endpoints.signUp, {
 			method: 'POST',
 			body: JSON.stringify({
 				email,
@@ -329,7 +327,7 @@ export class AuthFlow {
 		}).then(handleIdentityToolkitResponse);
 
 		// Get the user profile and persists the session.
-		this.getProfile({ idToken, refreshToken, expiresAt });
+		await this.getProfile({ idToken, refreshToken, expiresAt });
 	}
 
 	/**
@@ -340,7 +338,7 @@ export class AuthFlow {
 	async signInWithPassword(email, password) {
 		// Calculate the expiration date for the idToken.
 		const expiresAt = Date.now() + 3600 * 1000;
-		const { id_token: idToken, refresh_token: refreshToken } = await fetch(this.endpoints.signInWithPassword, {
+		const { idToken, refreshToken } = await fetch(this.endpoints.signInWithPassword, {
 			method: 'POST',
 			body: JSON.stringify({
 				email,
@@ -350,16 +348,16 @@ export class AuthFlow {
 		}).then(handleIdentityToolkitResponse);
 
 		// Get the user profile and persists the session.
-		this.getProfile({ idToken, refreshToken, expiresAt });
+		await this.getProfile({ idToken, refreshToken, expiresAt });
 	}
 
 	/**
 	 * Send a password reset code to the user's email.
 	 */
 	async sendPasswordResetCode(email) {
-		const userData = await fetch(this.endpoints.sendOobCode, {
+		await fetch(this.endpoints.sendOobCode, {
 			method: 'POST',
-			body: `{"requestType": "PASSWORD_RESET", ${email} }`
+			body: `{"requestType": "PASSWORD_RESET", "email": "${email}" }`
 		}).then(handleIdentityToolkitResponse);
 	}
 
@@ -378,13 +376,40 @@ export class AuthFlow {
 	 * Update user's profile information.
 	 */
 	async updateProfile(newData) {
+		// Calculate the expiration date for the idToken.
+		const expiresAt = Date.now() + 3600 * 1000;
 		const updatedData = await fetch(this.endpoints.update, {
 			method: 'POST',
-			body: JSON.stringify(newData)
+			body: JSON.stringify({
+				...newData,
+				idToken: this.user.tokenManager.idToken,
+				returnSecureToken: true
+			})
 		}).then(handleIdentityToolkitResponse);
 
+		if (updatedData.idToken) {
+			updatedData.tokenManager = {
+				idToken: updatedData.idToken,
+				refreshToken: updatedData.refreshToken,
+				expiresAt
+			};
+		} else {
+			updatedData.tokenManager = this.user.tokenManager;
+		}
+
 		delete updatedData.kind;
-		updatedData.tokenManager = this.user.tokenManager;
+		delete updatedData.idToken;
+		delete updatedData.refreshToken;
+
 		this.persistSession(updatedData);
+	}
+
+	async deleteAccount() {
+		await fetch(this.endpoints.delete, {
+			method: 'POST',
+			body: `{"idToken": "${this.user.tokenManager.idToken}"}`
+		}).then(handleIdentityToolkitResponse);
+
+		this.signOut();
 	}
 }
