@@ -26,29 +26,7 @@ Before you decide if this lib is for you please consider:
 Short answer: yes. But the full answer is, that it depends on you project. If you want to know more details, please read my post on the Firebase google group: https://groups.google.com/forum/#!topic/firebase-talk/F0NenvOEYrE
 
 ## Roadmap
-
-- [ ] Exchange custom token for an ID and refresh token
-- [x] Exchange a refresh token for an ID token
-- [ ] Sign up with email / password
-- [ ] Sign in with email / password
-- [ ] Sign in anonymously
-- [x] Sign in with OAuth credential
-- [ ] Fetch providers for email
-- [ ] Send password reset email
-- [ ] Verify password reset code
-- [ ] Confirm password reset
-- [ ] Change email
-- [ ] Change password
-- [ ] Update profile
-- [ ] Get user data
-- [ ] Link with email/password
-- [ ] Link with OAuth credential
-- [ ] Unlink provider
-- [ ] Send email verification
-- [ ] Confirm email verification
-- [ ] Delete account
-
-It might seem like very little progress was made, but the biggest feature is "Sign in with Oauth", all the rest are just HTTP requests. So hopefully progress will be made swiftly with the rest of the features.
+The roadmap and progress to 1.0 can be seen at [issue #2](https://github.com/samuelgozi/firebase-auth-lite/issues/2).
 
 ## How to install and use.
 
