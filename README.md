@@ -26,7 +26,7 @@ Before you decide if this lib is for you please consider:
 Short answer: yes. But the full answer is, that it depends on you project. If you want to know more details, please read my post on the Firebase google group: https://groups.google.com/forum/#!topic/firebase-talk/F0NenvOEYrE
 
 ## Roadmap
-Progress towards 1.0 and features being added are tracked can be seen in [issue #2](https://github.com/samuelgozi/firebase-auth-lite/issues/2).
+Progress towards 1.0 and features being added can be seen in [issue #2](https://github.com/samuelgozi/firebase-auth-lite/issues/2).
 
 ## How to install and use.
 
