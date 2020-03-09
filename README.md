@@ -73,13 +73,13 @@ yarn add firebase-auth-lite
 
 import { AuthFlow } from 'firebase-auth-lite';
 
-const auth = new Auth({
+const auth = new AuthFlow({
 	// Firebase apiKey, can be found in the config file.
 	apiKey: '[API_KEY]',
 	// Url that was whitelisted in the Federated Provider settings.
 	// This is not a redirect for all individual logins, you can
 	// configure that later.
-	redirectUri: `http://localhost:123/auth`
+	redirectUri: `http://localhost:1234/auth`
 });
 
 // Add Google as an OAuth federated provider.

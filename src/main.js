@@ -2,7 +2,7 @@
  * Full documentation for the "identitytoolkit" API can be found here:
  * https://developers.google.com/resources/api-libraries/documentation/identitytoolkit/v3/python/latest/identitytoolkit_v3.relyingparty.html
  */
-import humanReadableErrors from './errors';
+import humanReadableErrors from './errors.json';
 
 /**
  * Handles errors and converts the
@@ -10,6 +10,7 @@ import humanReadableErrors from './errors';
  *
  * @prop {Response} response The raw response returned from the fetch API.
  * @returns {Object} response data.
+ * @private
  */
 async function handleIdentityToolkitResponse(response) {
 	const data = await response.json();
@@ -36,6 +37,7 @@ async function handleIdentityToolkitResponse(response) {
 /**
  * Encapsulates Federated identity configuration and logic.
  * @prop {ProviderOptions} options
+ * @private
  */
 class Provider {
 	constructor({ provider, redirectUri, customParams, scope, endpoint }) {
@@ -123,21 +125,50 @@ export class AuthFlow {
 		this.user = JSON.parse(localStorage.getItem(`Auth:User:${this.apiKey}`));
 	}
 
-	// Saves the credentials along with the access token and id token in localStorage.
-	persistSession(credentials) {
-		localStorage.setItem(`Auth:User:${this.apiKey}`, JSON.stringify(credentials));
-		this.user = credentials;
+	/**
+	 * Saves the credentials along with the access token and id token in localStorage.
+	 * @param {Object} credentials
+	 * @private
+	 */
+	persistSession(userData) {
+		// Persist the session to the local storage.
+		localStorage.setItem(`Auth:User:${this.apiKey}`, JSON.stringify(userData));
+		this.user = userData;
 	}
 
-	// Remove the session info from the localStorage.
+	/**
+	 * Sign out the currently signed in user.
+	 * Removes all data stored in the localStorage that's associated with the user.
+	 */
 	signOut() {
 		localStorage.removeItem(`Auth:User:${this.apiKey}`);
 		this.user = null;
 	}
 
 	/**
+	 * Gets the latest user profile data, and persists it locally.
+	 * @param {Object} [tokenManager] Only when not logged in.
+	 * @returns {Object}
+	 */
+	async getProfile(tokenManager = this.user || this.user.tokenManager) {
+		if (!tokenManager) throw Error('User is not logged in, and tokenManager param was left empty');
+
+		const userData = (
+			await fetch(this.endpoints.lookup, {
+				method: 'POST',
+				body: `{"idToken":"${tokenManager.idToken}"}`
+			}).then(handleIdentityToolkitResponse)
+		).users[0];
+
+		delete userData.kind;
+		userData.tokenManager = tokenManager;
+
+		this.persistSession(userData);
+		return userData;
+	}
+
+	/**
 	 * Uses native fetch, but adds authorization headers
-	 * if the Reference was instantiated with an auth instance.
 	 * The API is exactly the same as native fetch.
 	 * @param {Request|Object|string} resource the resource to send the request to, or an options object.
 	 * @param {Object} init an options object.
@@ -148,33 +179,37 @@ export class AuthFlow {
 		if (this.user !== null) {
 			// If the token already expired,
 			// then refresh it and only after that add authorization headers.
-			// Will also run if "expiresAt" doesn't exist at all, remove this in about a month.
-			if (this.user.expiresAt < Date.now() || this.user.expiresAt === undefined) await this.refreshIdToken();
-			request.headers.set('Authorization', `Bearer ${this.user.idToken}`);
+			if (this.user.tokenManager.expiresAt < Date.now()) await this.refreshIdToken();
+			request.headers.set('Authorization', `Bearer ${this.user.tokenManager.idToken}`);
 		}
 
 		return fetch(request);
 	}
 
-	// Exchange a refresh token for an id token.
+	/**
+	 * Refreshes the idToken by using the locally stored refresh token.
+	 * @private
+	 */
 	async refreshIdToken() {
+		// Calculated expiration time for the new token.
+		const expiresAt = Date.now() + 3600 * 1000;
 		const response = await fetch(this.endpoints.token, {
 			method: 'POST',
 			body: JSON.stringify({
 				grant_type: 'refresh_token',
-				refresh_token: this.user.refreshToken
+				refresh_token: this.user.tokenManager.refreshToken
 			})
 		}).then(handleIdentityToolkitResponse);
 
 		// Merge the new data with the old data and save it locally.
 		this.persistSession({
 			...this.user,
-
 			// Rename the data names to match the ones used in the app.
-			oauthAccessToken: response.access_token,
-			idToken: response.id_token,
-			refreshToken: response.refresh_token,
-			expiresAt: Date.now() + response.expires_in * 1000
+			tokenManager: {
+				idToken: response.id_token,
+				refreshToken: response.refresh_token,
+				expiresAt
+			}
 		});
 	}
 
@@ -191,7 +226,12 @@ export class AuthFlow {
 		});
 	}
 
-	// Start auth flow of a federated id provider.
+	/**
+	 * Start auth flow of a federated id provider.
+	 * Will redirect the page to the federated login page.
+	 * @param {string} providerName A valid provider name
+	 * @param {string} [localRedirectUri] The url to redirect back to after the authorization is done.
+	 */
 	async startOauthFlow(providerName, localRedirectUri) {
 		// Get an array of the allowed providers names.
 		const allowedProviders = Object.keys(this.providers);
@@ -206,7 +246,7 @@ export class AuthFlow {
 
 			// If the argument redirectUri was passed, then save it in sessionStorage.
 			// This is not the redirectUri sent to the Provider, this is an internal redirectUri
-			// used internally for routing within the app after the Authorization was performed.
+			// used for routing within the app after the Authorization was performed.
 			if (localRedirectUri) sessionStorage.setItem(`Auth:Redirect:${this.apiKey}`, localRedirectUri);
 			// Save the sessionId that we just received in the local storage.
 			sessionStorage.setItem(`Auth:SessionId:${this.apiKey}`, sessionId);
@@ -234,10 +274,11 @@ export class AuthFlow {
 		const redirectUri = sessionStorage.getItem(`Auth:Redirect:${this.apiKey}`);
 		// Get the sessionId we received before the redirect from sessionStorage.
 		const sessionId = sessionStorage.getItem(`Auth:SessionId:${this.apiKey}`);
+		// Calculate the expiration date for the idToken.
+		const expiresAt = Date.now() + 3600 * 1000;
 
-		// Try to exchange the Auth Code for Token and user
-		// data and save the data to the local storage.
-		const userData = await fetch(this.endpoints.signInWithIdp, {
+		// Try to exchange the Auth Code for an idToken and refreshToken.
+		const { idToken, refreshToken } = await fetch(this.endpoints.signInWithIdp, {
 			method: 'POST',
 			body: JSON.stringify({
 				requestUri: responseUrl,
@@ -247,11 +288,18 @@ export class AuthFlow {
 			})
 		}).then(handleIdentityToolkitResponse);
 
-		this.persistSession({
-			...userData,
-			// Add timestamp for the expiration date of the object.
-			expiresAt: Date.now() + userData.expiresIn * 1000
-		});
+		// We don't rely on the returned data because it contains information
+		// that is only accessible by issuing requests directly to the federated
+		// id provider.
+		//
+		// That data is is still available if you request it explicitly,
+		// but that is out of the scope of this library because its not required by all apps,
+		// and it is also the way the official SDK handles(ignores) this data.
+		//
+		// Instead we will make another request to the Firebase API to request the data
+		// that it saves, and therefore can be kept updated easily. And trust me, I don't
+		// like making additional requests either.
+		this.getProfile({ idToken, refreshToken, expiresAt });
 
 		// Now clean up the temporary objects from the local storage.
 		// This includes the sessionId and the local redirectURI.
@@ -261,5 +309,82 @@ export class AuthFlow {
 		// If a local redirect uri was set, redirect to it
 		// else, just get rid of the params in the location bar.
 		location.href = redirectUri || location.origin + location.pathname;
+	}
+
+	/**
+	 * Registers a user with an email and a password.
+	 * @param {string} email
+	 * @param {string} password
+	 */
+	async signUpWithPassword(email = '', password = '') {
+		// Calculate the expiration date for the idToken.
+		const expiresAt = Date.now() + 3600 * 1000;
+		const { id_token: idToken, refresh_token: refreshToken } = await fetch(this.endpoints.signUp, {
+			method: 'POST',
+			body: JSON.stringify({
+				email,
+				password,
+				returnSecureToken: true
+			})
+		}).then(handleIdentityToolkitResponse);
+
+		// Get the user profile and persists the session.
+		this.getProfile({ idToken, refreshToken, expiresAt });
+	}
+
+	/**
+	 * Sign in with email and password.
+	 * @param {string} email
+	 * @param {string} password
+	 */
+	async signInWithPassword(email, password) {
+		// Calculate the expiration date for the idToken.
+		const expiresAt = Date.now() + 3600 * 1000;
+		const { id_token: idToken, refresh_token: refreshToken } = await fetch(this.endpoints.signInWithPassword, {
+			method: 'POST',
+			body: JSON.stringify({
+				email,
+				password,
+				returnSecureToken: true
+			})
+		}).then(handleIdentityToolkitResponse);
+
+		// Get the user profile and persists the session.
+		this.getProfile({ idToken, refreshToken, expiresAt });
+	}
+
+	/**
+	 * Send a password reset code to the user's email.
+	 */
+	async sendPasswordResetCode(email) {
+		const userData = await fetch(this.endpoints.sendOobCode, {
+			method: 'POST',
+			body: `{"requestType": "PASSWORD_RESET", ${email} }`
+		}).then(handleIdentityToolkitResponse);
+	}
+
+	/**
+	 * Sets a new password by using a reset code.
+	 * @param {string} code
+	 */
+	resetPassword(code, newPassword) {
+		return fetch(this.endpoints.resetPassword, {
+			method: 'POST',
+			body: `{"oobCode": ${code}, "newPassword": ${newPassword}}`
+		}).then(handleIdentityToolkitResponse);
+	}
+
+	/**
+	 * Update user's profile information.
+	 */
+	async updateProfile(newData) {
+		const updatedData = await fetch(this.endpoints.update, {
+			method: 'POST',
+			body: JSON.stringify(newData)
+		}).then(handleIdentityToolkitResponse);
+
+		delete updatedData.kind;
+		updatedData.tokenManager = this.user.tokenManager;
+		this.persistSession(updatedData);
 	}
 }
