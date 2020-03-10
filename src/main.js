@@ -88,10 +88,10 @@ class Provider {
  * Encapsulates authentication flow logic.
  * @param {Object} options Options object.
  * @param {string} options.apiKey The firebase API key
- * @param {string} options.redirectUri The URL to redirect to after signIn.
+ * @param {string} options.redirectUri The redirect URL used by OAuth providers.
  * @param {Array.<ProviderOptions|string>} options.providers Array of arguments that will be passed to the addProvider method.
  */
-export class AuthFlow {
+export default class Auth {
 	constructor({ apiKey, redirectUri, providers }) {
 		if (!redirectUri) throw Error('The argument "redirectUri" is required');
 
@@ -126,6 +126,28 @@ export class AuthFlow {
 	}
 
 	/**
+	 * Adds a provider to the AuthFlow instance.
+	 * @param {(ProviderOptions|string)} options Can be an options object, or a string representing the name of a provider.
+	 */
+	addProvider(options) {
+		if (typeof options === 'string') options = { provider: options };
+		this.providers[options.provider] = new Provider({
+			redirectUri: this.redirectUri,
+			endpoint: this.endpoints.createAuthUri,
+			...options
+		});
+	}
+
+	/**
+	 * Verifies that the user is logged in,
+	 * If not then he can't run the method that called this function.
+	 * @private
+	 */
+	verifyLoggedIn() {
+		if (!this.user) throw Error('The user must be logged-in to use this method.');
+	}
+
+	/**
 	 * Saves the user data in the local storage.
 	 * @param {Object} credentials
 	 * @private
@@ -146,51 +168,46 @@ export class AuthFlow {
 	}
 
 	/**
-	 * Gets the user data from the server, and updates the local caches.
-	 * @param {Object} [tokenManager] Only when not logged in.
-	 * @returns {Object}
-	 */
-	async getProfile(tokenManager = this.user || this.user.tokenManager) {
-		if (!tokenManager) throw Error('User is not logged in, and tokenManager param was left empty');
-
-		const userData = (
-			await fetch(this.endpoints.lookup, {
-				method: 'POST',
-				body: `{"idToken":"${tokenManager.idToken}"}`
-			}).then(handleIdentityToolkitResponse)
-		).users[0];
-
-		delete userData.kind;
-		userData.tokenManager = tokenManager;
-
-		this.persistSession(userData);
-		return userData;
-	}
-
-	/**
-	 * Refreshes the idToken by using the locally stored refresh token.
+	 * Refreshes the idToken by using the locally stored refresh token
+	 * only if the idToken has expired.
 	 * @private
 	 */
 	async refreshIdToken() {
+		// If the idToken didn't expire, return.
+		if (Date.now() < this.user.tokenManager.expiresAt) return;
+
 		// If a request for a new token was already made, then wait for it and then return.
-		if (this.refreshTokenRequest) return await this.refreshTokenRequest;
+		if (this.refreshTokenRequest) {
+			console.log('Already called...');
+			return await this.refreshTokenRequest;
+		}
 
-		// Calculated expiration time for the new token.
-		const expiresAt = Date.now() + 3600 * 1000;
-		const { id_token: idToken, refresh_token: refreshToken } = await fetch(this.endpoints.token, {
-			method: 'POST',
-			body: JSON.stringify({
-				grant_type: 'refresh_token',
-				refresh_token: this.user.tokenManager.refreshToken
+		try {
+			// Calculated expiration time for the new token.
+			const expiresAt = Date.now() + 3600 * 1000;
+
+			// Save the promise so that if this function is called
+			// anywhere else we don't make more than one request.
+			this.refreshTokenRequest = fetch(this.endpoints.token, {
+				method: 'POST',
+				body: JSON.stringify({
+					grant_type: 'refresh_token',
+					refresh_token: this.user.tokenManager.refreshToken
+				})
 			})
-		}).then(handleIdentityToolkitResponse);
-
-		// Merge the new data with the old data and save it locally.
-		this.persistSession({
-			...this.user,
-			// Rename the data names to match the ones used in the app.
-			tokenManager: { idToken, refreshToken, expiresAt }
-		});
+				.then(handleIdentityToolkitResponse)
+				.then(({ id_token: idToken, refresh_token: refreshToken }) => {
+					// Merge the new data with the old data and save it locally.
+					this.persistSession({
+						...this.user,
+						// Rename the data names to match the ones used in the app.
+						tokenManager: { idToken, refreshToken, expiresAt }
+					});
+				});
+		} catch (e) {
+			this.refreshTokenRequest = null;
+			throw e;
+		}
 	}
 
 	/**
@@ -204,24 +221,11 @@ export class AuthFlow {
 
 		if (this.user !== null) {
 			// Check if the token expired. If it did, refresh it.
-			if (this.user.tokenManager.expiresAt < Date.now()) await this.refreshIdToken();
+			if (Date.now() > this.user.tokenManager.expiresAt) await this.refreshIdToken();
 			request.headers.set('Authorization', `Bearer ${this.user.tokenManager.idToken}`);
 		}
 
 		return fetch(request);
-	}
-
-	/**
-	 * Adds a provider to the AuthFlow instance.
-	 * @param {(ProviderOptions|string)} options Can be an options object, or a string representing the name of a provider.
-	 */
-	addProvider(options) {
-		if (typeof options === 'string') options = { provider: options };
-		this.providers[options.provider] = new Provider({
-			redirectUri: this.redirectUri,
-			endpoint: this.endpoints.createAuthUri,
-			...options
-		});
 	}
 
 	/**
@@ -310,11 +314,35 @@ export class AuthFlow {
 	}
 
 	/**
-	 * Registers a user with an email and a password.
-	 * @param {string} email
-	 * @param {string} password
+	 * Gets the user data from the server, and updates the local caches.
+	 * @param {Object} [tokenManager] Only when not logged in.
+	 * @returns {Object}
 	 */
-	async signUpWithPassword(email = '', password = '') {
+	async getProfile(tokenManager = this.user || this.user.tokenManager) {
+		this.verifyLoggedIn();
+		this.refreshIdToken();
+
+		const userData = (
+			await fetch(this.endpoints.lookup, {
+				method: 'POST',
+				body: `{"idToken":"${tokenManager.idToken}"}`
+			}).then(handleIdentityToolkitResponse)
+		).users[0];
+
+		delete userData.kind;
+		userData.tokenManager = tokenManager;
+
+		this.persistSession(userData);
+		return userData;
+	}
+
+	/**
+	 * Signs up with email and password or anonymously when passed no arguments.
+	 * Signs the user in automatically on completion.
+	 * @param {string} [email] The email for the user to create.
+	 * @param {string} [password] The password for the user to create.
+	 */
+	async signUp(email, password) {
 		// Calculate the expiration date for the idToken.
 		const expiresAt = Date.now() + 3600 * 1000;
 		const { idToken, refreshToken } = await fetch(this.endpoints.signUp, {
@@ -365,17 +393,35 @@ export class AuthFlow {
 	 * Sets a new password by using a reset code.
 	 * @param {string} code
 	 */
-	resetPassword(code, newPassword) {
+	verifyPasswordResetCode(code) {
 		return fetch(this.endpoints.resetPassword, {
 			method: 'POST',
-			body: `{"oobCode": ${code}, "newPassword": ${newPassword}}`
+			body: `{"oobCode": "${code}"}`
 		}).then(handleIdentityToolkitResponse);
+	}
+
+	/**
+	 * Sets a new password by using a reset code.
+	 * Can also be used to very oobCode by not passing a password.
+	 * @param {string} code
+	 * @returns {string} The email of the account to which the code was issued.
+	 */
+	async resetPassword(oobCode, newPassword) {
+		const { email } = await fetch(this.endpoints.resetPassword, {
+			method: 'POST',
+			body: JSON.stringify({ oobCode, newPassword })
+		}).then(handleIdentityToolkitResponse);
+
+		return email;
 	}
 
 	/**
 	 * Update user's profile information.
 	 */
 	async updateProfile(newData) {
+		this.verifyLoggedIn();
+		this.refreshIdToken();
+
 		// Calculate the expiration date for the idToken.
 		const expiresAt = Date.now() + 3600 * 1000;
 		const updatedData = await fetch(this.endpoints.update, {
@@ -405,6 +451,9 @@ export class AuthFlow {
 	}
 
 	async deleteAccount() {
+		this.verifyLoggedIn();
+		this.refreshIdToken();
+
 		await fetch(this.endpoints.delete, {
 			method: 'POST',
 			body: `{"idToken": "${this.user.tokenManager.idToken}"}`
