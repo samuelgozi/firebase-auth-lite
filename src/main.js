@@ -25,66 +25,6 @@ async function handleIdentityToolkitResponse(response) {
 }
 
 /**
- * Allowed types for the "from" option.
- * @typedef {Object} ProviderOptions
- * @prop {string} provider The lower-cased name of the provider(google/facebook/etc).
- * @prop {string} redirectUri Uri to redirect to with the access_token.
- * @prop {string} [customParams] Custom params for the request.
- * @prop {string} [scope] Scope string for the federated provider.
- * @prop {string} endpoint A Url endpoint for a custom provider.
- */
-
-/**
- * Encapsulates Federated identity configuration and logic.
- * @prop {ProviderOptions} options
- * @private
- */
-class Provider {
-	constructor({ provider, redirectUri, customParams, scope, endpoint }) {
-		const allowedProviders = ['google', 'facebook', 'github', 'twitter'];
-		const defaultScopes = {
-			google: 'profile',
-			facebook: 'email'
-		};
-
-		// Validate the name.
-		if (!allowedProviders.includes(provider))
-			throw Error(
-				`"${provider}" Is not a valid provider name, The supported providers are "${allowedProviders.join(', ')}"`
-			);
-
-		// Validate that required params are not undefined.
-		if (redirectUri === undefined)
-			throw Error('Provider requires the "redirectUri" prop in order to create an instance.');
-
-		if (endpoint === undefined) throw Error('Provider requires the "redirectUri" prop in order to create an instance.');
-
-		this.endpoint = endpoint;
-		this.provider = provider;
-		this.redirectUri = redirectUri;
-		this.customParams = customParams;
-		this.scope = scope || defaultScopes[provider];
-	}
-
-	/**
-	 * Returns the authentication endpoint URI for the
-	 * federated provider with all the required settings
-	 * to proceed with the authentication.
-	 */
-	getAuthUri() {
-		return fetch(this.endpoint, {
-			method: 'POST',
-			body: JSON.stringify({
-				providerId: this.provider + '.com',
-				continueUri: this.redirectUri,
-				oauthScope: this.scope,
-				customParameter: this.customParams
-			})
-		}).then(handleIdentityToolkitResponse);
-	}
-}
-
-/**
  * Encapsulates authentication flow logic.
  * @param {Object} options Options object.
  * @param {string} options.apiKey The firebase API key
@@ -129,13 +69,20 @@ export default class Auth {
 	 * Adds a provider to the AuthFlow instance.
 	 * @param {(ProviderOptions|string)} options Can be an options object, or a string representing the name of a provider.
 	 */
-	addProvider(options) {
-		if (typeof options === 'string') options = { provider: options };
-		this.providers[options.provider] = new Provider({
-			redirectUri: this.redirectUri,
-			endpoint: this.endpoints.createAuthUri,
-			...options
-		});
+	addProvider(name, scope) {
+		const allowedProviders = ['apple', 'google', 'facebook', 'microsoft', 'github', 'twitter'];
+
+		// Validate the name.
+		if (!allowedProviders.includes(provider))
+			throw Error(
+				`"${provider}" Is not a supported provider name, The supported providers are "${allowedProviders.join(', ')}"`
+			);
+
+		// Validate that required params are not undefined.
+		if (this.redirectUri === undefined)
+			throw Error('In order to use an Identity provider you should initiate the "Auth" instance with a "redirectUri".');
+
+		this.providers[name] = new Provider({ name, scope });
 	}
 
 	/**
@@ -231,39 +178,36 @@ export default class Auth {
 	/**
 	 * Start auth flow of a federated id provider.
 	 * Will redirect the page to the federated login page.
-	 * @param {string} providerName A valid provider name
-	 * @param {string} [localRedirectUri] The url to redirect back to after the authorization is done.
+	 * @param {string} idp A valid provider name
+	 * @param {string} context A string that will be returned by "finishOauthFlow".
 	 */
-	async startOauthFlow(providerName, localRedirectUri) {
+	async startOauthFlow(idp, context) {
 		// Get an array of the allowed providers names.
 		const allowedProviders = Object.keys(this.providers);
 
 		// Verify that the requested provider is indeed configured.
-		if (!allowedProviders.includes(providerName))
-			throw Error(`You haven't configured "${providerName}" with this AuthFlow instance.`);
+		if (!allowedProviders.includes(idp)) throw Error(`You haven't configured "${idp}" with this "Auth" instance.`);
 
-		try {
-			// Get the url and other data necessary for the authentication.
-			const { authUri, sessionId } = await this.providers[providerName].getAuthUri();
+		// Get the url and other data necessary for the authentication.
+		const provider = this.providers[idp];
+		const { authUri, sessionId } = await fetch(this.endpoints.createAuthUri, {
+			method: 'POST',
+			body: JSON.stringify({
+				providerId: idp + '.com',
+				continueUri: this.redirectUri,
+				oauthScope: provider.scope,
+				authFlowType: 'CODE_FLOW',
+				context
+			})
+		}).then(handleIdentityToolkitResponse);
 
-			// If the argument redirectUri was passed, then save it in sessionStorage.
-			// This is not the redirectUri sent to the Provider, this is an internal redirectUri
-			// used for routing within the app after the Authorization was performed.
-			if (localRedirectUri) sessionStorage.setItem(`Auth:Redirect:${this.apiKey}`, localRedirectUri);
-			// Save the sessionId that we just received in the local storage.
-			sessionStorage.setItem(`Auth:SessionId:${this.apiKey}`, sessionId);
+		// Save the sessionId that we just received in the local storage.
+		// Is required to finish the auth flow, I believe this is used to mitigate CSRF attacks.
+		// (No docs on this...)
+		sessionStorage.setItem(`Auth:SessionId:${this.apiKey}`, sessionId);
 
-			// Finally - redirect the page to the auth endpoint.
-			location.href = authUri;
-		} catch (error) {
-			// If it failed to initialize the Auth flow for any reason,
-			// remove all the temporary objects from the sessionStorage.
-			sessionStorage.removeItem(`Auth:Redirect:${this.apiKey}`);
-			sessionStorage.removeItem(`Auth:SessionId:${this.apiKey}`);
-
-			// Throw the error.
-			throw error;
-		}
+		// Finally - redirect the page to the auth endpoint.
+		location.href = authUri;
 	}
 
 	/**
@@ -271,23 +215,18 @@ export default class Auth {
 	 * returned the auth Code to our page, and exchanges it with
 	 * User info, Access Token and ID token.
 	 */
-	async finishOauthFlow(responseUrl = location.href) {
-		// Get the local redirect URI if it exists.
-		const redirectUri = sessionStorage.getItem(`Auth:Redirect:${this.apiKey}`);
+	async finishOauthFlow(requestUri = location.href) {
+		if (!new URL(location).searchParams.has('code')) return;
+
 		// Get the sessionId we received before the redirect from sessionStorage.
 		const sessionId = sessionStorage.getItem(`Auth:SessionId:${this.apiKey}`);
 		// Calculate the expiration date for the idToken.
 		const expiresAt = Date.now() + 3600 * 1000;
 
 		// Try to exchange the Auth Code for an idToken and refreshToken.
-		const { idToken, refreshToken } = await fetch(this.endpoints.signInWithIdp, {
+		const { idToken, refreshToken, context } = await fetch(this.endpoints.signInWithIdp, {
 			method: 'POST',
-			body: JSON.stringify({
-				requestUri: responseUrl,
-				sessionId,
-				returnIdpCredential: true,
-				returnSecureToken: true
-			})
+			body: JSON.stringify({ requestUri, sessionId, returnSecureToken: true })
 		}).then(handleIdentityToolkitResponse);
 
 		// We don't rely on the returned data because it contains information
@@ -303,14 +242,7 @@ export default class Auth {
 		// like making additional requests either.
 		this.getProfile({ idToken, refreshToken, expiresAt });
 
-		// Now clean up the temporary objects from the local storage.
-		// This includes the sessionId and the local redirectURI.
-		sessionStorage.removeItem(`Auth:Redirect:${this.apiKey}`);
-		sessionStorage.removeItem(`Auth:SessionId:${this.apiKey}`);
-
-		// If a local redirect uri was set, redirect to it
-		// else, just get rid of the params in the location bar.
-		location.href = redirectUri || location.origin + location.pathname;
+		return context;
 	}
 
 	/**
