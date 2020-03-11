@@ -5,24 +5,11 @@
 import humanReadableErrors from './errors.json';
 
 /**
- * Handles errors and converts the
- * response into an object and returns it.
- *
- * @prop {Response} response The raw response returned from the fetch API.
- * @returns {Object} response data.
- * @private
+ * Settings object for an IDP(Identity Provider).
+ * @typedef {Object} ProviderOptions
+ * @param {string} options.name The name of the provider in lowercase.
+ * @param {string} [options.scope] The scopes for the IDP, this is optional and defaults to "openid email".
  */
-async function handleIdentityToolkitResponse(response) {
-	const data = await response.json();
-
-	// If the response has an error, check to see if we have a human readable version of it,
-	// and throw that instead.
-	if (!response.ok) {
-		throw Error(humanReadableErrors[data.error.message] || data.error.message);
-	}
-
-	return data;
-}
 
 /**
  * Encapsulates authentication flow logic.
@@ -32,66 +19,68 @@ async function handleIdentityToolkitResponse(response) {
  * @param {Array.<ProviderOptions|string>} options.providers Array of arguments that will be passed to the addProvider method.
  */
 export default class Auth {
-	constructor({ apiKey, redirectUri, providers }) {
+	constructor({ name = 'default', apiKey, redirectUri, providers = [] }) {
 		if (!redirectUri) throw Error('The argument "redirectUri" is required');
 
-		function getEndpoint(path) {
-			return `https://identitytoolkit.googleapis.com/v1/accounts:${path}?key=${apiKey}`;
+		for (let options of providers) {
+			const { name, scope } = typeof options === 'string' ? { name: options } : options;
+			const allowedProviders = ['apple', 'google', 'facebook', 'microsoft', 'github', 'twitter'];
+
+			// Validate the name.
+			if (!allowedProviders.includes(provider))
+				throw Error(`"${provider}" is not a supported. The supported providers are "${allowedProviders.join(', ')}"`);
+
+			this.providers[name] = scope;
 		}
 
-		this.apiKey = apiKey;
-		this.redirectUri = redirectUri;
-		this.providers = {};
-		this.endpoints = {
-			token: `https://securetoken.googleapis.com/v1/token?key=${apiKey}`,
-			signUp: getEndpoint('signUp'),
-			signInWithCustomToken: getEndpoint('signInWithCustomToken'),
-			signInWithPassword: getEndpoint('signInWithPassword'),
-			signInWithIdp: getEndpoint('signInWithIdp'),
-			createAuthUri: getEndpoint('createAuthUri'),
-			sendOobCode: getEndpoint('sendOobCode'),
-			resetPassword: getEndpoint('resetPassword'),
-			update: getEndpoint('update'),
-			lookup: getEndpoint('lookup'),
-			delete: getEndpoint('delete')
-		};
+		Object.assign(this, {
+			name,
+			apiKey,
+			redirectUri,
+			// If the user is already logged, then it will be his data, else it'll be null.
+			user: JSON.parse(localStorage.getItem(`Auth:User:${this.apiKey}`))
+		});
 
-		if (providers) {
-			if (!Array.isArray(providers)) throw Error('The argument "providers" should be an array');
-			providers.forEach(options => this.addProvider(options));
-		}
-
-		// If the user is already logged, then it will be his data, else it'll be null.
-		this.user = JSON.parse(localStorage.getItem(`Auth:User:${this.apiKey}`));
+		// Update the local user data.
+		if (this.user) this.fetchProfile();
 	}
 
 	/**
-	 * Adds a provider to the AuthFlow instance.
-	 * @param {(ProviderOptions|string)} options Can be an options object, or a string representing the name of a provider.
-	 */
-	addProvider(name, scope) {
-		const allowedProviders = ['apple', 'google', 'facebook', 'microsoft', 'github', 'twitter'];
-
-		// Validate the name.
-		if (!allowedProviders.includes(provider))
-			throw Error(
-				`"${provider}" Is not a supported provider name, The supported providers are "${allowedProviders.join(', ')}"`
-			);
-
-		// Validate that required params are not undefined.
-		if (this.redirectUri === undefined)
-			throw Error('In order to use an Identity provider you should initiate the "Auth" instance with a "redirectUri".');
-
-		this.providers[name] = new Provider({ name, scope });
-	}
-
-	/**
-	 * Verifies that the user is logged in,
-	 * If not then he can't run the method that called this function.
+	 * Make post request to a specific endpoint, and return the response.
+	 * @param {string} endpoint The name of the endpoint.
+	 * @param {any} request Body to pass to the request.
 	 * @private
 	 */
-	verifyLoggedIn() {
+	api(endpoint, body) {
+		const url =
+			endpoint === 'token'
+				? `https://securetoken.googleapis.com/v1/token?key=${this.apiKey}`
+				: `https://identitytoolkit.googleapis.com/v1/accounts:${endpoint}?key=${this.apiKey}`;
+
+		return fetch(url, {
+			method: 'POST',
+			body: typeof body === 'string' ? body : JSON.stringify(body)
+		}).then(async response => {
+			const data = await response.json();
+
+			// If the response has an error, check to see if we have a human readable version of it,
+			// and throw that instead.
+			if (!response.ok) {
+				throw Error(humanReadableErrors[data.error.message] || data.error.message);
+			}
+
+			return data;
+		});
+	}
+
+	/**
+	 * Makes sure the user is logged in and has up-to-date credentials.
+	 * @throws Will throw if the user is not logged in.
+	 * @private
+	 */
+	enforceAuth() {
 		if (!this.user) throw Error('The user must be logged-in to use this method.');
+		this.refreshIdToken(); // Won't do anything if the token is valid.
 	}
 
 	/**
@@ -101,7 +90,7 @@ export default class Auth {
 	 */
 	persistSession(userData) {
 		// Persist the session to the local storage.
-		localStorage.setItem(`Auth:User:${this.apiKey}`, JSON.stringify(userData));
+		localStorage.setItem(`Auth:User:${this.apiKey}:${this.name}`, JSON.stringify(userData));
 		this.user = userData;
 	}
 
@@ -110,7 +99,7 @@ export default class Auth {
 	 * Removes all data stored in the localStorage that's associated with the user.
 	 */
 	signOut() {
-		localStorage.removeItem(`Auth:User:${this.apiKey}`);
+		localStorage.removeItem(`Auth:User:${this.apiKey}:${this.name}`);
 		this.user = null;
 	}
 
@@ -125,7 +114,6 @@ export default class Auth {
 
 		// If a request for a new token was already made, then wait for it and then return.
 		if (this.refreshTokenRequest) {
-			console.log('Already called...');
 			return await this.refreshTokenRequest;
 		}
 
@@ -135,22 +123,17 @@ export default class Auth {
 
 			// Save the promise so that if this function is called
 			// anywhere else we don't make more than one request.
-			this.refreshTokenRequest = fetch(this.endpoints.token, {
-				method: 'POST',
-				body: JSON.stringify({
-					grant_type: 'refresh_token',
-					refresh_token: this.user.tokenManager.refreshToken
-				})
-			})
-				.then(handleIdentityToolkitResponse)
-				.then(({ id_token: idToken, refresh_token: refreshToken }) => {
-					// Merge the new data with the old data and save it locally.
-					this.persistSession({
-						...this.user,
-						// Rename the data names to match the ones used in the app.
-						tokenManager: { idToken, refreshToken, expiresAt }
-					});
+			this.refreshTokenRequest = this.api('token', {
+				grant_type: 'refresh_token',
+				refresh_token: this.user.tokenManager.refreshToken
+			}).then(({ id_token: idToken, refresh_token: refreshToken }) => {
+				// Merge the new data with the old data and save it locally.
+				this.persistSession({
+					...this.user,
+					// Rename the data names to match the ones used in the app.
+					tokenManager: { idToken, refreshToken, expiresAt }
 				});
+			});
 		} catch (e) {
 			this.refreshTokenRequest = null;
 			throw e;
@@ -167,12 +150,25 @@ export default class Auth {
 		const request = resource instanceof Request ? resource : new Request(resource, init);
 
 		if (this.user !== null) {
-			// Check if the token expired. If it did, refresh it.
-			if (Date.now() > this.user.tokenManager.expiresAt) await this.refreshIdToken();
+			await this.refreshIdToken(); // Won't do anything if the token didn't expire yet.
 			request.headers.set('Authorization', `Bearer ${this.user.tokenManager.idToken}`);
 		}
 
 		return fetch(request);
+	}
+
+	/**
+	 * Signs the user in with a custom Auth token.
+	 * @param {string} token The custom token.
+	 */
+	async signInWithCustomToken(token) {
+		// Calculate the expiration date for the idToken.
+		const expiresAt = Date.now() + 3600 * 1000;
+		// Try to exchange the Auth Code for an idToken and refreshToken.
+		const { idToken, refreshToken } = await this.api('signInWithCustomToken', { token, returnSecureToken: true });
+
+		// Now get the user profile.
+		await this.fetchProfile({ idToken, refreshToken, expiresAt });
 	}
 
 	/**
@@ -182,6 +178,9 @@ export default class Auth {
 	 * @param {string} context A string that will be returned by "finishOauthFlow".
 	 */
 	async startOauthFlow(idp, context) {
+		if (!this.redirectUri)
+			throw Error('In order to use an Identity provider you should initiate the "Auth" instance with a "redirectUri".');
+
 		// Get an array of the allowed providers names.
 		const allowedProviders = Object.keys(this.providers);
 
@@ -189,34 +188,31 @@ export default class Auth {
 		if (!allowedProviders.includes(idp)) throw Error(`You haven't configured "${idp}" with this "Auth" instance.`);
 
 		// Get the url and other data necessary for the authentication.
-		const provider = this.providers[idp];
-		const { authUri, sessionId } = await fetch(this.endpoints.createAuthUri, {
-			method: 'POST',
-			body: JSON.stringify({
-				providerId: idp + '.com',
-				continueUri: this.redirectUri,
-				oauthScope: provider.scope,
-				authFlowType: 'CODE_FLOW',
-				context
-			})
-		}).then(handleIdentityToolkitResponse);
+		const { authUri, sessionId } = await this.api('createAuthUri', {
+			providerId: idp + '.com',
+			continueUri: this.redirectUri,
+			oauthScope: this.providers[idp],
+			authFlowType: 'CODE_FLOW',
+			context
+		});
 
 		// Save the sessionId that we just received in the local storage.
 		// Is required to finish the auth flow, I believe this is used to mitigate CSRF attacks.
 		// (No docs on this...)
-		sessionStorage.setItem(`Auth:SessionId:${this.apiKey}`, sessionId);
+		sessionStorage.setItem(`Auth:SessionId:${this.apiKey}:${this.name}`, sessionId);
 
 		// Finally - redirect the page to the auth endpoint.
 		location.href = authUri;
 	}
 
 	/**
-	 * This code runs after the Federated Id Provider
-	 * returned the auth Code to our page, and exchanges it with
-	 * User info, Access Token and ID token.
+	 * Takes the IDP response URI and uses it to sign the user in.
+	 * This should be run on the page that the IDP redirect to after authorization.
+	 * Will fail silently if the URL doesn't have a "code" search param.
 	 */
-	async finishOauthFlow(requestUri = location.href) {
-		if (!new URL(location).searchParams.has('code')) return;
+	async finishOauthFlow() {
+		// Return if the responseURI doesn't contain an access code.
+		if (!location.href.includes('&code=')) return;
 
 		// Get the sessionId we received before the redirect from sessionStorage.
 		const sessionId = sessionStorage.getItem(`Auth:SessionId:${this.apiKey}`);
@@ -224,48 +220,18 @@ export default class Auth {
 		const expiresAt = Date.now() + 3600 * 1000;
 
 		// Try to exchange the Auth Code for an idToken and refreshToken.
-		const { idToken, refreshToken, context } = await fetch(this.endpoints.signInWithIdp, {
-			method: 'POST',
-			body: JSON.stringify({ requestUri, sessionId, returnSecureToken: true })
-		}).then(handleIdentityToolkitResponse);
+		const { idToken, refreshToken, context } = await this.api('signInWithIdp', {
+			requestUri: location.href,
+			sessionId,
+			returnSecureToken: true
+		});
 
-		// We don't rely on the returned data because it contains information
-		// that is only accessible by issuing requests directly to the federated
-		// id provider.
-		//
-		// That data is is still available if you request it explicitly,
-		// but that is out of the scope of this library because its not required by all apps,
-		// and it is also the way the official SDK handles(ignores) this data.
-		//
-		// Instead we will make another request to the Firebase API to request the data
-		// that it saves, and therefore can be kept updated easily. And trust me, I don't
-		// like making additional requests either.
-		this.getProfile({ idToken, refreshToken, expiresAt });
+		// Now get the user profile.
+		await this.fetchProfile({ idToken, refreshToken, expiresAt });
 
+		// Remove sensitive data from the URLSearch params.
+		history.replaceState(null, null, location.origin + location.pathname);
 		return context;
-	}
-
-	/**
-	 * Gets the user data from the server, and updates the local caches.
-	 * @param {Object} [tokenManager] Only when not logged in.
-	 * @returns {Object}
-	 */
-	async getProfile(tokenManager = this.user || this.user.tokenManager) {
-		this.verifyLoggedIn();
-		this.refreshIdToken();
-
-		const userData = (
-			await fetch(this.endpoints.lookup, {
-				method: 'POST',
-				body: `{"idToken":"${tokenManager.idToken}"}`
-			}).then(handleIdentityToolkitResponse)
-		).users[0];
-
-		delete userData.kind;
-		userData.tokenManager = tokenManager;
-
-		this.persistSession(userData);
-		return userData;
 	}
 
 	/**
@@ -277,17 +243,14 @@ export default class Auth {
 	async signUp(email, password) {
 		// Calculate the expiration date for the idToken.
 		const expiresAt = Date.now() + 3600 * 1000;
-		const { idToken, refreshToken } = await fetch(this.endpoints.signUp, {
-			method: 'POST',
-			body: JSON.stringify({
-				email,
-				password,
-				returnSecureToken: true
-			})
-		}).then(handleIdentityToolkitResponse);
+		const { idToken, refreshToken } = await this.api('signUp', {
+			email,
+			password,
+			returnSecureToken: true
+		});
 
 		// Get the user profile and persists the session.
-		await this.getProfile({ idToken, refreshToken, expiresAt });
+		await this.fetchProfile({ idToken, refreshToken, expiresAt });
 	}
 
 	/**
@@ -298,38 +261,29 @@ export default class Auth {
 	async signInWithPassword(email, password) {
 		// Calculate the expiration date for the idToken.
 		const expiresAt = Date.now() + 3600 * 1000;
-		const { idToken, refreshToken } = await fetch(this.endpoints.signInWithPassword, {
-			method: 'POST',
-			body: JSON.stringify({
-				email,
-				password,
-				returnSecureToken: true
-			})
-		}).then(handleIdentityToolkitResponse);
+		const { idToken, refreshToken } = await this.api('signInWithPassword', {
+			email,
+			password,
+			returnSecureToken: true
+		});
 
 		// Get the user profile and persists the session.
-		await this.getProfile({ idToken, refreshToken, expiresAt });
+		await this.fetchProfile({ idToken, refreshToken, expiresAt });
 	}
 
 	/**
 	 * Send a password reset code to the user's email.
 	 */
 	async sendPasswordResetCode(email) {
-		await fetch(this.endpoints.sendOobCode, {
-			method: 'POST',
-			body: `{"requestType": "PASSWORD_RESET", "email": "${email}" }`
-		}).then(handleIdentityToolkitResponse);
+		await this.api('sendOobCode', { requestType: 'PASSWORD_RESET', email: 'email' });
 	}
 
 	/**
 	 * Sets a new password by using a reset code.
 	 * @param {string} code
 	 */
-	verifyPasswordResetCode(code) {
-		return fetch(this.endpoints.resetPassword, {
-			method: 'POST',
-			body: `{"oobCode": "${code}"}`
-		}).then(handleIdentityToolkitResponse);
+	verifyPasswordResetCode(oobCode) {
+		return this.api('resetPassword', { oobCode });
 	}
 
 	/**
@@ -339,31 +293,42 @@ export default class Auth {
 	 * @returns {string} The email of the account to which the code was issued.
 	 */
 	async resetPassword(oobCode, newPassword) {
-		const { email } = await fetch(this.endpoints.resetPassword, {
-			method: 'POST',
-			body: JSON.stringify({ oobCode, newPassword })
-		}).then(handleIdentityToolkitResponse);
-
-		return email;
+		return (await this.api('resetPassword', { oobCode, newPassword })).email;
 	}
 
 	/**
-	 * Update user's profile information.
+	 * Gets the user data from the server, and updates the local caches.
+	 * @param {Object} [tokenManager] Only when not logged in.
+	 * @returns {Object}
+	 * @throws Will throw if the user is not signed in.
+	 */
+	async fetchProfile(tokenManager = this.user || this.user.tokenManager) {
+		this.enforceAuth();
+
+		const userData = (await this.api('lookup', { idToken: tokenManager.idToken })).users[0];
+
+		delete userData.kind;
+		userData.tokenManager = tokenManager;
+
+		this.persistSession(userData);
+		return userData;
+	}
+
+	/**
+	 * Update user's profile.
+	 * @param {Object} newData An object with the new data to overwrite.
+	 * @throws Will throw if the user is not signed in.
 	 */
 	async updateProfile(newData) {
-		this.verifyLoggedIn();
-		this.refreshIdToken();
+		this.enforceAuth();
 
 		// Calculate the expiration date for the idToken.
 		const expiresAt = Date.now() + 3600 * 1000;
-		const updatedData = await fetch(this.endpoints.update, {
-			method: 'POST',
-			body: JSON.stringify({
-				...newData,
-				idToken: this.user.tokenManager.idToken,
-				returnSecureToken: true
-			})
-		}).then(handleIdentityToolkitResponse);
+		const updatedData = await this.api('update', {
+			...newData,
+			idToken: this.user.tokenManager.idToken,
+			returnSecureToken: true
+		});
 
 		if (updatedData.idToken) {
 			updatedData.tokenManager = {
@@ -382,14 +347,14 @@ export default class Auth {
 		this.persistSession(updatedData);
 	}
 
+	/**
+	 * Deletes the currently logged in account and logs out.
+	 * @throws Will throw if the user is not signed in.
+	 */
 	async deleteAccount() {
-		this.verifyLoggedIn();
-		this.refreshIdToken();
+		this.enforceAuth();
 
-		await fetch(this.endpoints.delete, {
-			method: 'POST',
-			body: `{"idToken": "${this.user.tokenManager.idToken}"}`
-		}).then(handleIdentityToolkitResponse);
+		await this.api('delete', `{"idToken": "${this.user.tokenManager.idToken}"}`);
 
 		this.signOut();
 	}
