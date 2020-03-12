@@ -7,8 +7,17 @@ import humanReadableErrors from './errors.json';
 /**
  * Settings object for an IDP(Identity Provider).
  * @typedef {Object} ProviderOptions
- * @param {string} options.name The name of the provider in lowercase.
- * @param {string} [options.scope] The scopes for the IDP, this is optional and defaults to "openid email".
+ * @property {string} options.name The name of the provider in lowercase.
+ * @property {string} [options.scope] The scopes for the IDP, this is optional and defaults to "openid email".
+ */
+
+/**
+ * Object response from a "fetchProvidersForEmail" request.
+ * @typedef {Object} ProvidersForEmailResponse
+ * @property {Array.<string>} allProviders All providers the user has once used to do federated login
+ * @property {boolean} registered All sign-in methods this user has used.
+ * @property {string} sessionId Session ID which should be passed in the following verifyAssertion request
+ * @property {Array.<string>} signinMethods All sign-in methods this user has used.
  */
 
 /**
@@ -294,6 +303,17 @@ export default class Auth {
 	 */
 	async resetPassword(oobCode, newPassword) {
 		return (await this.api('resetPassword', { oobCode, newPassword })).email;
+	}
+
+	/**
+	 * Returns info about all providers associated with a specified email.
+	 * @param {string} email The user's email address.
+	 * @returns {ProvidersForEmailResponse}
+	 */
+	async fetchProvidersForEmail(email) {
+		const response = await this.api('createAuthUri', { identifier: email, continueUri: location.href });
+		delete response.kind;
+		return response;
 	}
 
 	/**
