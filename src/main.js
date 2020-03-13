@@ -1,6 +1,6 @@
 /**
  * Full documentation for the "identitytoolkit" API can be found here:
- * https://developers.google.com/resources/api-libraries/documentation/identitytoolkit/v3/python/latest/identitytoolkit_v3.relyingparty.html
+ * https://cloud.google.com/identity-platform/docs/reference/rest/v1/accounts
  */
 import humanReadableErrors from './errors.json';
 
@@ -18,6 +18,14 @@ import humanReadableErrors from './errors.json';
  * @property {boolean} registered All sign-in methods this user has used.
  * @property {string} sessionId Session ID which should be passed in the following verifyAssertion request
  * @property {Array.<string>} signinMethods All sign-in methods this user has used.
+ */
+
+/**
+ * Setting object for the "startOauthFlow" method.
+ * @typedef {Object} oauthFlowOptions
+ * @property {string} provider Name of the provider to use.
+ * @property {string} [context] A string that will be returned after the Oauth flow is finished, should be used to retain context.
+ * @property {boolean} [linkAccount = false] Whether to link this oauth account with the current account. defaults to false.
  */
 
 /**
@@ -150,8 +158,7 @@ export default class Auth {
 	}
 
 	/**
-	 * Uses native fetch, but adds authorization headers
-	 * The API is exactly the same as native fetch.
+	 * Uses native fetch, but adds authorization headers otherwise the API is exactly the same as native fetch.
 	 * @param {Request|Object|string} resource the resource to send the request to, or an options object.
 	 * @param {Object} init an options object.
 	 */
@@ -167,7 +174,7 @@ export default class Auth {
 	}
 
 	/**
-	 * Signs the user in with a custom Auth token.
+	 * Signs in or signs up a user by exchanging a custom Auth token.
 	 * @param {string} token The custom token.
 	 */
 	async signInWithCustomToken(token) {
@@ -181,26 +188,32 @@ export default class Auth {
 	}
 
 	/**
-	 * Start auth flow of a federated id provider.
+	 * Start auth flow of a federated Id provider.
 	 * Will redirect the page to the federated login page.
-	 * @param {string} idp A valid provider name
-	 * @param {string} context A string that will be returned by "finishOauthFlow".
+	 * @param {oauthFlowOptions|string} options An options object, or a string with the name of the provider.
 	 */
-	async startOauthFlow(idp, context) {
+	async signInWithProvider(options) {
 		if (!this.redirectUri)
 			throw Error('In order to use an Identity provider you should initiate the "Auth" instance with a "redirectUri".');
+
+		// Make sure the user is logged in when an "account link" was requested.
+		if (options.linkAccount) this.enforceAuth();
+
+		// The options can be a string, or an object, so here we make sure we extract the right data in each case.
+		const { provider, context, linkAccount } = typeof options === string ? { provider: options } : options;
 
 		// Get an array of the allowed providers names.
 		const allowedProviders = Object.keys(this.providers);
 
 		// Verify that the requested provider is indeed configured.
-		if (!allowedProviders.includes(idp)) throw Error(`You haven't configured "${idp}" with this "Auth" instance.`);
+		if (!allowedProviders.includes(provider))
+			throw Error(`You haven't configured "${provider}" with this "Auth" instance.`);
 
 		// Get the url and other data necessary for the authentication.
 		const { authUri, sessionId } = await this.api('createAuthUri', {
-			providerId: idp + '.com',
+			providerId: provider + '.com',
 			continueUri: this.redirectUri,
-			oauthScope: this.providers[idp],
+			oauthScope: this.providers[provider],
 			authFlowType: 'CODE_FLOW',
 			context
 		});
@@ -209,27 +222,32 @@ export default class Auth {
 		// Is required to finish the auth flow, I believe this is used to mitigate CSRF attacks.
 		// (No docs on this...)
 		sessionStorage.setItem(`Auth:SessionId:${this.apiKey}:${this.name}`, sessionId);
+		// Save if this is a fresh log-in or a "link account" request.
+		sessionStorage.setItem(`Auth:LinkAccount:${this.apiKey}:${this.name}`, linkAccount);
 
 		// Finally - redirect the page to the auth endpoint.
 		location.href = authUri;
 	}
 
 	/**
-	 * Takes the IDP response URI and uses it to sign the user in.
-	 * This should be run on the page that the IDP redirect to after authorization.
+	 * Signs in or signs up a user using credentials from an Identity Provider (IdP) after a redirect.
 	 * Will fail silently if the URL doesn't have a "code" search param.
+	 * @private
 	 */
-	async finishOauthFlow() {
-		// Return if the responseURI doesn't contain an access code.
-		if (!location.href.includes('&code=')) return;
-
+	async finishProviderSignIn() {
 		// Get the sessionId we received before the redirect from sessionStorage.
-		const sessionId = sessionStorage.getItem(`Auth:SessionId:${this.apiKey}`);
+		const sessionId = sessionStorage.getItem(`Auth:SessionId:${this.apiKey}:${this.name}`);
+
+		// Get the indication if this was a "link account" request.
+		const linkAccount = sessionStorage.getItem(`Auth:LinkAccount:${this.apiKey}:${this.name}`);
+		if (linkAccount && !this.user) throw Error('Request to "Link account" was made, but user is no longer signed-in');
+
 		// Calculate the expiration date for the idToken.
 		const expiresAt = Date.now() + 3600 * 1000;
-
 		// Try to exchange the Auth Code for an idToken and refreshToken.
 		const { idToken, refreshToken, context } = await this.api('signInWithIdp', {
+			// If this is a "link account" flow, then attach the idToken of the currently logged in account.
+			idToken: linkAccount ? this.user.tokenManager.idToken : undefined,
 			requestUri: location.href,
 			sessionId,
 			returnSecureToken: true
@@ -244,8 +262,24 @@ export default class Auth {
 	}
 
 	/**
-	 * Signs up with email and password or anonymously when passed no arguments.
-	 * Signs the user in automatically on completion.
+	 * Handles all sign in flows that complete via redirects.
+	 * Fails silently if no redirect was detected.
+	 */
+	async handleSignInRedirect() {
+		// Oauth Federated Identity Provider flow.
+		if (location.href.match(/[&?]code=/)) return this.finishProviderSignIn();
+
+		// Email Sign-in flow.
+		if (location.href.match(/[&?]oobCode=/)) {
+			const oobCode = location.href.match(/[?&]oobCode=([^&]+)/)[1];
+			const email = location.href.match(/[?&]email=([^&]+)/)[1];
+			await this.signInWithEmailLink(oobCode, email);
+		}
+	}
+
+	/**
+	 * Signs up with email and password or anonymously when no arguments are passed.
+	 * Automatically signs the user in  on completion.
 	 * @param {string} [email] The email for the user to create.
 	 * @param {string} [password] The password for the user to create.
 	 */
@@ -263,7 +297,7 @@ export default class Auth {
 	}
 
 	/**
-	 * Sign in with email and password.
+	 * Signs in a user with email and password.
 	 * @param {string} email
 	 * @param {string} password
 	 */
@@ -281,18 +315,38 @@ export default class Auth {
 	}
 
 	/**
-	 * Send a password reset code to the user's email.
+	 * Signs in or signs up a user with a out-of-band code from an email link.
+	 * If a user does not exist with the given email address, a user record will be created.
+	 * @param {string} oobCode The out-of-band code from the email link.
+	 * @param {string} email The email address the sign-in link was sent to.
 	 */
-	async sendPasswordResetCode(email) {
-		await this.api('sendOobCode', { requestType: 'PASSWORD_RESET', email: 'email' });
+	async signInWithEmailLink(oobCode, email) {
+		// Calculate the expiration date for the idToken.
+		const expiresAt = Date.now() + 3600 * 1000;
+		const { idToken, refreshToken } = await this.api('signInWithEmailLink', { oobCode, email });
+
+		// Now get the user profile.
+		await this.fetchProfile({ idToken, refreshToken, expiresAt });
 	}
 
 	/**
-	 * Sets a new password by using a reset code.
-	 * @param {string} code
+	 * Sends an out-of-band confirmation code for an account.
+	 * Can be used to reset a password, to verify an email address and send a Sign-in email link.
+	 * The `email` argument is not needed only when verifying an email(In that case it will be completely ignored, even if specified), otherwise it is required.
+	 * @param {'PASSWORD_RESET'|'VERIFY_EMAIL'|'EMAIL_SIGNIN'} requestType The type of out-of-band (OOB) code to send.
+	 * @param {string} [email] When the `requestType` is `PASSWORD_RESET` you need to provide an email address, else it will be ignored.
+	 * @returns {Promise}
 	 */
-	verifyPasswordResetCode(oobCode) {
-		return this.api('resetPassword', { oobCode });
+	sendOobCode(requestType, email) {
+		const verifyEmail = requestType === 'VERIFY_EMAIL';
+		if (verifyEmail) this.enforceAuth();
+
+		return void this.api('sendOobCode', {
+			idToken: verifyEmail ? this.user.tokenManager.idToken : undefined,
+			requestType,
+			email,
+			continueUrl: this.redirectUri + `?email=${email}`
+		});
 	}
 
 	/**
