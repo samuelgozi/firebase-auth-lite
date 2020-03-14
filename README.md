@@ -100,7 +100,7 @@ auth.signUp('email', 'password');
 In order to sign-in, pass the email and password to the `signInWithPassword` method.
 
 ```js
-auth.signInWithPassword('email', 'password');
+auth.signIn('email', 'password');
 ```
 
 If the data is correct and matches an existing user, the user will be signed in. Else, an error will be thrown with an explanation as to why.
@@ -153,7 +153,7 @@ const auth = new Auth({
 	apiKey: '[The Firebase API key]'
 });
 
-// thats all, really.
+// That's all, really.
 auth.signUp();
 ```
 
