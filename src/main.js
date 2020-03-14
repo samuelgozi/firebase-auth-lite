@@ -41,12 +41,6 @@ export default class Auth {
 
 		for (let options of providers) {
 			const { name, scope } = typeof options === 'string' ? { name: options } : options;
-			const allowedProviders = ['apple', 'google', 'facebook', 'microsoft', 'github', 'twitter'];
-
-			// Validate the name.
-			if (!allowedProviders.includes(provider))
-				throw Error(`"${provider}" is not a supported. The supported providers are "${allowedProviders.join(', ')}"`);
-
 			this.providers[name] = scope;
 		}
 
@@ -211,7 +205,7 @@ export default class Auth {
 
 		// Get the url and other data necessary for the authentication.
 		const { authUri, sessionId } = await this.api('createAuthUri', {
-			providerId: provider + '.com',
+			providerId: provider,
 			continueUri: this.redirectUri,
 			oauthScope: this.providers[provider],
 			authFlowType: 'CODE_FLOW',
@@ -279,7 +273,7 @@ export default class Auth {
 
 	/**
 	 * Signs up with email and password or anonymously when no arguments are passed.
-	 * Automatically signs the user in  on completion.
+	 * Automatically signs the user in on completion.
 	 * @param {string} [email] The email for the user to create.
 	 * @param {string} [password] The password for the user to create.
 	 */
