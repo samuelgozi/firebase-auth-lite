@@ -36,21 +36,21 @@ import humanReadableErrors from './errors.json';
  * @param {Array.<ProviderOptions|string>} options.providers Array of arguments that will be passed to the addProvider method.
  */
 export default class Auth {
-	/**
-	 * Event listener's callbacks.
-	 * @private
-	 */
-	listeners = [];
-
-	/**
-	 * User data if the user is logged in, else its null.
-	 * @type {Object|null}
-	 */
-	user = JSON.parse(localStorage.getItem(`Auth:User:${this.apiKey}:${this.name}`));
-
 	constructor({ name = 'default', apiKey, redirectUri, providers = [] }) {
 		if (!redirectUri) throw Error('The argument "redirectUri" is required');
 		if (!Array.isArray(providers)) throw Error('The argument "providers" must be an array');
+
+		/**
+		 * Event listener's callbacks.
+		 * @private
+		 */
+		this.listeners = [];
+
+		/**
+		 * User data if the user is logged in, else its null.
+		 * @type {Object|null}
+		 */
+		this.user = JSON.parse(localStorage.getItem(`Auth:User:${this.apiKey}:${this.name}`));
 
 		Object.assign(this, {
 			name,
@@ -399,7 +399,7 @@ export default class Auth {
 	 * @param {Object} [tokenManager] Only when not logged in.
 	 * @throws Will throw if the user is not signed in.
 	 */
-	async fetchProfile(tokenManager = this.user?.tokenManager) {
+	async fetchProfile(tokenManager = this.user && this.user.tokenManager) {
 		!this.user && !tokenManager && (await this.enforceAuth());
 
 		const userData = (await this.api('lookup', { idToken: tokenManager.idToken })).users[0];
