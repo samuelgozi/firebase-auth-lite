@@ -12,9 +12,9 @@ The API is completely different. This is not a drop in replacement, instead our 
 In addition you should consider the next points:
 
 1. This is still work in progress and the API will change without warning until version 1.0.
-2. There is a small difference when working with Google as a Federated Identity Provider.
+2. There is a small difference working with Federated Identity Providers.
 3. Sessions can only be persisted in localStorage(More options will be added).
-4. Works only on browsers that support ES5, localStorage and Fetch API.
+4. The code is written with modern JS and you are responsible for tranpiling it for your targets, but babelrc configuration is ready. The code also makes use of the Fetch API and local storage.
 5. Not fully tested yet(I don't have a good testing strategy yet...)
 
 ## Features and roadmap
@@ -156,6 +156,20 @@ const auth = new Auth({
 // That's all, really.
 auth.signUp();
 ```
+
+## Listening for state changes
+
+When working with reactive frameworks/libraries you will want to be able to tell when the user's data was updated.
+Its very easy to do with this library.
+in order to listen to state changes just add a callback:
+
+```js
+auth.onStateChange(user => {
+	console.log(user); // Will log the user object.
+});
+```
+
+When the user has just logged in, or the data was refreshed(due to page reload, or token expiration, which will reload all the users data automatically) the argument will be the user object. On sign-out the argument will be null.
 
 # Full API Reference
 
