@@ -1,36 +1,59 @@
 # Firebase auth lite (WIP!)
 
-The Official Firebase SDKs for Javascript are too big and can make it very hard for developers to achieve recommended loading times, and if you are like me and strive to provide the best performance for you users, its impossible to do on smartphones over 3G networks due to its big size.
+A performance focused alternative to the official firebase auth library. Is designed to work with my other alternatives for [storage](https://github.com/samuelgozi/firebase-storage-lite) and [firestore](https://github.com/samuelgozi/firebase-firestore-lite).
 
-I took it upon myself to provide an alternative SDK for when bad performance is just not an option. I'm currently working on libraries for Auth(this one), Firestore, and Storage.
-
-The main goal of these libraries is to be as lean as possible, and provide close to full functionality, but if it comes at the cost of performance or size, I will most likely choose to stick to lower level functionality over features count. One example for that will be IE11 and browsers that don't support ES5. I wont try to support them because they require heavy pollyfils, and are dying anyways.
+The goal of this library is to provide a performance focused alternative to the official SDKs. This comes with some costs. The big one is browser support, we only support modern browsers, but you can always rin them through Babel.
 
 [My Alternative SDK performs in average 13 times better and is 27 times smaller than the official ones](https://github.com/samuelgozi/firebase-firestore-lite/wiki/Firebase-Alternative-SDK-Benchmarks).
 
 ## What else do I need to consider?
 
-The API will not be identical or even close to the official one, but the core functionality will be the same.
+The API is completely different. This is not a drop in replacement, instead our API is much simpler and easier to use.
+In addition you should consider the next points:
 
-Before you decide if this lib is for you please consider:
+1. This is still work in progress and the API will change without warning until version 1.0.
+2. There is a small difference working with Federated Identity Providers.
+3. Sessions can only be persisted in localStorage(More options will be added).
+4. The code is written with modern JS and you are responsible for tranpiling it for your targets, but babelrc configuration is ready. The code also makes use of the Fetch API and local storage.
+5. Not fully tested yet(I don't have a good testing strategy yet...)
 
-1. This is still work in progress!
-2. Currently only Oauth authentication is supported(Take a look ath the roadmap for a more detailed list).
-3. When adding a provider, or when using Google you will have to whitelist Redirect URLs manually(According to the OpenId Connect, thats how its supposed to be).
-4. Sessions can only be persisted in localStorage(More options will be added).
-5. Works only on browsers that support ES5, localStorage and Fetch API.
-6. Not fully tested yet(I don't have a good testing strategy yet...)
+## Features and roadmap
 
-## Is performance in the official JS SDK really that bad?
+- [x] Authenticate with Email and password.
+- [x] Authenticate with Federated Identity Provider.
+- [x] Authenticate with link to email(no password required).
+- [x] Authenticate with a custom token.
+- [x] Authenticate anonymously.
+- [ ] Authenticate with phone.
 
-Short answer: yes. But the full answer is, that it depends on you project. If you want to know more details, please read my post on the Firebase google group: https://groups.google.com/forum/#!topic/firebase-talk/F0NenvOEYrE
+- [x] "Upgrade" anonymous accounts to any of the other ones.
 
-## Roadmap
-Progress towards 1.0 and features being added can be seen in [issue #2](https://github.com/samuelgozi/firebase-auth-lite/issues/2).
+- [x] List all providers associated with an Email.
+- [x] Update Profile
+- [x] Reset password
+- [x] Verify email
+- [x] Delete the account.
 
-## How to install and use.
+The roadmap and progress to 1.0 can be seen at [issue #2](https://github.com/samuelgozi/firebase-auth-lite/issues/2).
 
-Before using it please note that its still work in progress.
+## Setting up Federated identity providers
+
+You might have noticed that when adding a Oauth Sign-in methid in the firebase console, you are asked to add a URL that looks something like this to the Oauth's configurations: `https://[app-id].firebaseapp.com/__/auth/handler`
+
+What you are essentially doing is whitelisting that URL, which is a hidden URL that exists in every firebase app. When using this library, you will need to add the URL of **your app** instead of the firebase's one. You need to add the URL of the page in your app that will handle the log in. You'll see what I mean in the docs below.
+
+You might be curious as to why I'm auoiding using firebases endpoint, well, the reasons are:
+
+1. It is more secure. The reason you need to whitelist in the first place is for security.
+2. It is way faster, in some cases up to 5 seconds faster.
+3. I don't trust firebase(or anyone) with my user's private data, and you shouldn't either.
+
+Yes I know that the third one sounds exaggerated, especially when we rely on them anyways. But their endpoint works on the client(It's JS) and you shouldn't trust the client.
+
+## How to install
+
+Once again i will say that its all still work in progress. Some things might break, and the API might change.
+However, I do encourage anyone to try it. I need feedback in order to improve it, so please use it and don't hesitate to leave feedback!
 
 ```
 npm install firebase-auth-lite
@@ -42,117 +65,113 @@ or
 yarn add firebase-auth-lite
 ```
 
-### How to set up
+After adding it to your dependencies instantiate.
 
-#### 1. Instantiate and add a provider.
+```js
+import Auth from 'firebase-auth-lite';
 
-```javascript
-// auth.js
+// The multiple options can be seen in the API Reference,
+// but only the apiKey is required across all auth flows.
+const auth = new Auth({
+	apiKey: '[The Firebase API key]'
+});
+```
 
-import { AuthFlow } from 'firebase-auth-lite';
+### Authenticate with email and password.
+
+First instantiate Auth.
+
+```js
+import Auth from 'firebase-auth-lite';
 
 const auth = new Auth({
-	// Firebase apiKey, can be found in the config file.
-	apiKey: '[API_KEY]',
-	// Url that was whitelisted in the Federated Provider settings.
-	// This is not a redirect for all individual logins, you can
-	// configure that later.
-	redirectUri: `http://localhost:123/auth`
+	apiKey: '[The Firebase API key]'
+});
+```
+
+Then to sign-up use the `signUp` method.
+Please note that after a sign up, the user will be signed in automatically.
+
+```js
+// Pass a new email and password.
+auth.signUp('email', 'password');
+```
+
+In order to sign-in, pass the email and password to the `signInWithPassword` method.
+
+```js
+auth.signIn('email', 'password');
+```
+
+If the data is correct and matches an existing user, the user will be signed in. Else, an error will be thrown with an explanation as to why.
+
+### Authenticate with Federated Identity Provider.
+
+Instantiate Auth, but this time you need to provide more arguments:
+
+1. `redirectUri` - When signing in with an IdP, the user will be redirected to their page, and later redirected back into our app. This is how we tell the IdP were to send the user back. It needs to be a page that will finish the sign in flow by running a method(read below how).
+2. `providers` - An array of the names of the providers we have set up. the names should include the domain, for example: `google.com`, `facebook.com`, `twitter.com`, `apple.com` etc. You can also pass an object instead, if you whish to request a specific scope in the next format: `{name: "facebook.com", scope: "email, profile, etc..."}`
+
+Please make sure the provider is correctly set up in the Firebase console.
+
+```js
+const auth = new Auth({
+	apiKey: '[The Firebase API key]',
+	redirectUri: 'http://example.com/auth',
+	providers: ['google.com']
 });
 
-// Add Google as an OAuth federated provider.
-// You can use 'google', 'facebook', 'github' or 'twitter'.
-// If Firebase supports one that is not in this list, open an issue,
-// ill add it.
-// You can add more info like "scope", read the docs below.
-auth.addProvider({ provider: 'google' });
-
-// Export it so that you can use the instance from other places.
-export default auth;
-```
-
-There is one gotcha to using this library, when you add a Sign-in provider through the firebase console, you will need to manually add the redirect URL used in this step to that provider, instead(or in addition) to the `https://your-app.firebaseapp.com/__/auth/handler` that firebase asks you to add.
-
-I considered fixing this, but it makes the sign in considerably slower, and you need to add the link provided by firebase anyways. The case in which firebase will automatically add their authorized URL is when using Google as a provider. And you can add it from the GCP console here:
-https://console.developers.google.com/apis/credentials
-
-Another reason I didn't fix this is because I believe its a little bit more secure when you have to add them explicitly. According to the OpenID connect standard, that is the reason for the existence of the restriction to only redirect to whitelisted domains.
-
-#### 2. Begin authentication flow
-
-This will usually be called when a user clicks a "sign in with [provider]" button, but feel free to do whatever you like.
-
-```javascript
-// Import the file we created above with the AuthFlow instance.
-import auth from 'auth.js';
-
-// Run this function when a user wants to log in.
-function signIn() {
-	// The first argument is the provider we want to use to sign in,
-	// It has to be one that we configured, and we did configure one
-	// in the file above, we added google.
-	//
-	// The second argument is where to redirect to after the log in.
-	// Please note that this is not the same as what we passed in
-	// the other file for the `AuthFlow` constructor.
-	// The one there is used to finish the Oauth flow, and it has to
-	// be whitelisted from the federated provider settings.
-	auth.startOauthFlow('google', location.origin);
+// This function will run when the user click the sign in button.
+function handleSignIn() {
+	// This function will redirect the user out of our site, and into
+	// the providers auth site. When the user finishes, he will then be
+	// redirected into the `redirectUri` we have set in the `auth` instance.
+	auth.signInWithProvider('google.com');
 }
 
-// For example on click on a button
-document.getElementById('sign-in-with-google').addEventListener('click', signIn);
+// Listen for the click, and run the sign in function.
+document.getElementById('sign-in-google').addEventListener('click', handleSignIn);
 ```
 
-#### 3. Finish the auth flow
+The user will be redirected to `http://example.com/auth`, we need to make sure that we whitelisted this URL in the provider's settings. If not, we will receive an error with instructions on how to do so from the provider.
 
-After the user clicked the sign-in button, and the `startOauthFlow` function ran, the user will be redirected to google, and will be asked to give permissions to the app.
+In that URL we need to finish the auth flow. We do that very easily by running a function. You can even do it on the same page you redirected from.
 
-If everything went OK and the user approved, he will then be redirected to the URL we provided when instantiating `AuthFlow`, if you remember that was `http://localhost:123/auth`.
-
-So now in that route we need to run a function, and the user will be logged in.
-
-```javascript
-auth.finishOauthFlow();
-
-// Now the user info is available and persisted with local storage.
-console.log(auth.user);
+```js
+// This runs in the `redirectUri` location.
+auth.handleSignInRedirect();
 ```
 
-If you provided a redirect URL in the previous step then the user will be redirected to it when the `finishOauthFlow` is called.
+Thats it. After this the user should be signed in.
 
-### One last thing, the last two steps can be combined.
+### Authenticate anonymously.
 
-You don't need to have a route just to run `finishOauthFlow`. It is possible to start and finish the auth flow in the same path this way:
+You can authenticate a user anonymously with the same method used for email and password, just don't pass any arguments.
 
-```javascript
-// Import the file we created above with the AuthFlow instance.
-import auth from 'auth.js';
+```js
+const auth = new Auth({
+	apiKey: '[The Firebase API key]'
+});
 
-// Run this function when a user wants to log in.
-function signIn() {
-	// The first argument is the provider we want to use to sign in,
-	// It has to be one that we configured, and we did configure one
-	// in the file above, we added google.
-	//
-	// The second argument is where to redirect to after the log in.
-	// Please note that this is not the same as what we passed in
-	// the other file for the `AuthFlow` constructor.
-	// The one there is used to finish the Oauth flow, and it has to
-	// be whitelisted from the federated provider settings.
-	auth.startOauthFlow('google', location.origin);
-}
-
-// For example on click on a button
-document.getElementById('sign-in-with-google').addEventListener('click', signIn);
-
-// Here we check if the URL has a search param named `code`
-// It will be present on redirects from the Federated provider.
-if (new URL(location.href).searchParams.has('code')) {
-	auth.finishOauthFlow();
-}
+// That's all, really.
+auth.signUp();
 ```
+
+## Listening for state changes
+
+When working with reactive frameworks/libraries you will want to be able to tell when the user's data was updated.
+Its very easy to do with this library.
+in order to listen to state changes just add a callback:
+
+```js
+auth.onStateChange(user => {
+	console.log(user); // Will log the user object.
+});
+```
+
+When the user has just logged in, or the data was refreshed(due to page reload, or token expiration, which will reload all the users data automatically) the argument will be the user object. On sign-out the argument will be null.
 
 # Full API Reference
 
-A full API reference will be written when most of the features will be done. But the current guide covers most of what is done al ready.
+There are many more features, and they can be discovered by reading the full API reference. It can be found here:
+https://github.com/samuelgozi/firebase-auth-lite/wiki/API-Reference#ProviderOptions
