@@ -174,4 +174,4 @@ When the user has just logged in, or the data was refreshed(due to page reload, 
 # Full API Reference
 
 There are many more features, and they can be discovered by reading the full API reference. It can be found here:
-https://github.com/samuelgozi/firebase-auth-lite/wiki/API-Reference#ProviderOptions
+https://github.com/samuelgozi/firebase-auth-lite/wiki/API-Reference
