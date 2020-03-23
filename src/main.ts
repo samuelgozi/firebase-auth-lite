@@ -2,7 +2,25 @@
  * Full documentation for the "identitytoolkit" API can be found here:
  * https://cloud.google.com/identity-platform/docs/reference/rest/v1/accounts
  */
+import type { ActionCodeInfo, UserInfo as FBUser } from '@firebase/auth-types';
 import humanReadableErrors from './errors.json';
+
+type User = FBUser & { tokenManager: { idToken: string, refreshToken: string, expiresAt: number } };
+
+type UserCallback = (user: User | null) => void;
+
+type Provider = {
+  name: string;
+  scope: unknown;
+}
+
+type AuthOptions = {
+  apiKey: string;
+  name: string;
+  providers: Array<Provider | string>;
+  redirectUri?: string;
+  storage: Storage;
+};
 
 /**
  * Settings object for an IDP(Identity Provider).
@@ -36,7 +54,15 @@ import humanReadableErrors from './errors.json';
  * @param {Array.<ProviderOptions|string>} options.providers Array of arguments that will be passed to the addProvider method.
  */
 export default class Auth {
-	constructor({ name = 'default', apiKey, redirectUri, providers = [] }) {
+  apiKey!: string;
+  listeners: UserCallback[];
+  name!: string;
+  providers!: Record<string, unknown>;
+  redirectUri?: string;
+  refreshTokenRequest: Promise<unknown> | null = null;
+  user: User | null;
+
+	constructor({ name = 'default', apiKey, redirectUri, providers = [] }: AuthOptions) {
 		if (!apiKey) throw Error('The argument "apiKey" is required');
 		if (!Array.isArray(providers)) throw Error('The argument "providers" must be an array');
 
@@ -50,7 +76,8 @@ export default class Auth {
 		 * User data if the user is logged in, else its null.
 		 * @type {Object|null}
 		 */
-		this.user = JSON.parse(localStorage.getItem(`Auth:User:${apiKey}:${name}`));
+    const storedUser = localStorage.getItem(`Auth:User:${apiKey}:${name}`);
+		this.user = storedUser ? JSON.parse(storedUser) : null;
 
 		Object.assign(this, {
 			name,
@@ -60,7 +87,7 @@ export default class Auth {
 		});
 
 		for (let options of providers) {
-			const { name, scope } = typeof options === 'string' ? { name: options } : options;
+			const { name, scope } = typeof options === 'string' ? { name: options, scope: undefined } : options;
 			this.providers[name] = scope;
 		}
 
@@ -84,7 +111,7 @@ export default class Auth {
 	 * Set up a function that will be called whenever the user state is changed.
 	 * @param {function} cb The function to call when the event is triggered.
 	 */
-	listen(cb) {
+	listen(cb: UserCallback) {
 		this.listeners.push(cb);
 
 		// Return a function to unbind the callback.
@@ -97,7 +124,7 @@ export default class Auth {
 	 * @param {any} request Body to pass to the request.
 	 * @private
 	 */
-	api(endpoint, body) {
+	api(endpoint: string, body: any) {
 		const url =
 			endpoint === 'token'
 				? `https://securetoken.googleapis.com/v1/token?key=${this.apiKey}`
@@ -112,7 +139,7 @@ export default class Auth {
 			// If the response has an error, check to see if we have a human readable version of it,
 			// and throw that instead.
 			if (!response.ok) {
-				throw Error(humanReadableErrors[data.error.message] || data.error.message);
+				throw Error(humanReadableErrors[data.error.message as keyof typeof humanReadableErrors] || data.error.message);
 			}
 
 			return data;
@@ -134,7 +161,7 @@ export default class Auth {
 	 * @param {Object} credentials
 	 * @private
 	 */
-	persistSession(userData) {
+	persistSession(userData: User) {
 		// Persist the session to the local storage.
 		localStorage.setItem(`Auth:User:${this.apiKey}:${this.name}`, JSON.stringify(userData));
 		this.user = userData;
@@ -158,7 +185,7 @@ export default class Auth {
 	 */
 	async refreshIdToken() {
 		// If the idToken didn't expire, return.
-		if (Date.now() < this.user.tokenManager.expiresAt) return;
+		if (Date.now() < (this.user?.tokenManager.expiresAt ?? 0)) return;
 
 		// If a request for a new token was already made, then wait for it and then return.
 		if (this.refreshTokenRequest) {
@@ -173,11 +200,11 @@ export default class Auth {
 			// anywhere else we don't make more than one request.
 			this.refreshTokenRequest = this.api('token', {
 				grant_type: 'refresh_token',
-				refresh_token: this.user.tokenManager.refreshToken
+				refresh_token: this.user?.tokenManager.refreshToken
 			}).then(({ id_token: idToken, refresh_token: refreshToken }) => {
 				// Merge the new data with the old data and save it locally.
 				this.persistSession({
-					...this.user,
+					...this.user!,
 					// Rename the data names to match the ones used in the app.
 					tokenManager: { idToken, refreshToken, expiresAt }
 				});
@@ -193,7 +220,7 @@ export default class Auth {
 	 * @param {Request|Object|string} resource the resource to send the request to, or an options object.
 	 * @param {Object} init an options object.
 	 */
-	async authorizedRequest(resource, init) {
+	async authorizedRequest(resource: Request | RequestInfo | string, init: RequestInit) {
 		const request = resource instanceof Request ? resource : new Request(resource, init);
 
 		if (this.user !== null) {
@@ -208,7 +235,7 @@ export default class Auth {
 	 * Signs in or signs up a user by exchanging a custom Auth token.
 	 * @param {string} token The custom token.
 	 */
-	async signInWithCustomToken(token) {
+	async signInWithCustomToken(token: string) {
 		// Calculate the expiration date for the idToken.
 		const expiresAt = Date.now() + 3600 * 1000;
 		// Try to exchange the Auth Code for an idToken and refreshToken.
@@ -223,15 +250,17 @@ export default class Auth {
 	 * Will redirect the page to the federated login page.
 	 * @param {oauthFlowOptions|string} options An options object, or a string with the name of the provider.
 	 */
-	async signInWithProvider(options) {
+	async signInWithProvider(options: string | { provider: string; context: unknown, linkAccount: boolean }) {
 		if (!this.redirectUri)
 			throw Error('In order to use an Identity provider you should initiate the "Auth" instance with a "redirectUri".');
 
 		// Make sure the user is logged in when an "account link" was requested.
-		if (options.linkAccount) await this.enforceAuth();
+		if (typeof options === 'object' && options.linkAccount) await this.enforceAuth();
 
 		// The options can be a string, or an object, so here we make sure we extract the right data in each case.
-		const { provider, context, linkAccount } = typeof options === 'string' ? { provider: options } : options;
+		const { provider, context, linkAccount } = typeof options === 'string'
+      ? { provider: options, context: undefined, linkAccount: undefined }
+      : options;
 
 		// Get an array of the allowed providers names.
 		const allowedProviders = Object.keys(this.providers);
@@ -254,7 +283,7 @@ export default class Auth {
 		// (No docs on this...)
 		sessionStorage.setItem(`Auth:SessionId:${this.apiKey}:${this.name}`, sessionId);
 		// Save if this is a fresh log-in or a "link account" request.
-		linkAccount && sessionStorage.setItem(`Auth:LinkAccount:${this.apiKey}:${this.name}`, true);
+		linkAccount && sessionStorage.setItem(`Auth:LinkAccount:${this.apiKey}:${this.name}`, 'true');
 
 		// Finally - redirect the page to the auth endpoint.
 		location.href = authUri;
@@ -280,7 +309,7 @@ export default class Auth {
 		// Try to exchange the Auth Code for an idToken and refreshToken.
 		const { idToken, refreshToken, context } = await this.api('signInWithIdp', {
 			// If this is a "link account" flow, then attach the idToken of the currently logged in account.
-			idToken: linkAccount ? this.user.tokenManager.idToken : undefined,
+			idToken: linkAccount ? this.user?.tokenManager.idToken : undefined,
 			requestUri,
 			sessionId,
 			returnSecureToken: true
@@ -290,7 +319,7 @@ export default class Auth {
 		await this.fetchProfile({ idToken, refreshToken, expiresAt });
 
 		// Remove sensitive data from the URLSearch params in the location bar.
-		history.replaceState(null, null, location.origin + location.pathname);
+		history.replaceState(null, '', location.origin + location.pathname);
 
 		return context;
 	}
@@ -305,14 +334,14 @@ export default class Auth {
 
 		// Email Sign-in flow.
 		if (location.href.match(/[&?]oobCode=/)) {
-			const oobCode = location.href.match(/[?&]oobCode=([^&]+)/)[1];
-			const email = location.href.match(/[?&]email=([^&]+)/)[1];
+			const oobCode = location.href.match(/[?&]oobCode=([^&]+)/)?.[1];
+			const email = location.href.match(/[?&]email=([^&]+)/)?.[1];
 			const expiresAt = Date.now() + 3600 * 1000;
 			const { idToken, refreshToken } = await this.api('signInWithEmailLink', { oobCode, email });
 			// Now get the user profile.
 			await this.fetchProfile({ idToken, refreshToken, expiresAt });
 			// Remove sensitive data from the URLSearch params in the location bar.
-			history.replaceState(null, null, location.origin + location.pathname);
+			history.replaceState(null, '', location.origin + location.pathname);
 		}
 	}
 
@@ -322,7 +351,7 @@ export default class Auth {
 	 * @param {string} [email] The email for the user to create.
 	 * @param {string} [password] The password for the user to create.
 	 */
-	async signUp(email, password) {
+	async signUp(email: string, password: string) {
 		// Calculate the expiration date for the idToken.
 		const expiresAt = Date.now() + 3600 * 1000;
 		const { idToken, refreshToken } = await this.api('signUp', {
@@ -340,7 +369,7 @@ export default class Auth {
 	 * @param {string} email
 	 * @param {string} password
 	 */
-	async signIn(email, password) {
+	async signIn(email: string, password: string) {
 		// Calculate the expiration date for the idToken.
 		const expiresAt = Date.now() + 3600 * 1000;
 		const { idToken, refreshToken } = await this.api('signInWithPassword', {
@@ -361,12 +390,12 @@ export default class Auth {
 	 * @param {string} [email] When the `requestType` is `PASSWORD_RESET` you need to provide an email address, else it will be ignored.
 	 * @returns {Promise}
 	 */
-	async sendOobCode(requestType, email) {
+	async sendOobCode(requestType: keyof typeof ActionCodeInfo.Operation, email?: string) {
 		const verifyEmail = requestType === 'VERIFY_EMAIL';
 		if (verifyEmail) await this.enforceAuth();
 
 		return void this.api('sendOobCode', {
-			idToken: verifyEmail ? this.user.tokenManager.idToken : undefined,
+			idToken: verifyEmail ? this.user?.tokenManager.idToken : undefined,
 			requestType,
 			email,
 			continueUrl: this.redirectUri + `?email=${email}`
@@ -379,7 +408,7 @@ export default class Auth {
 	 * @param {string} code
 	 * @returns {string} The email of the account to which the code was issued.
 	 */
-	async resetPassword(oobCode, newPassword) {
+	async resetPassword(oobCode: string, newPassword: string) {
 		return (await this.api('resetPassword', { oobCode, newPassword })).email;
 	}
 
@@ -388,7 +417,7 @@ export default class Auth {
 	 * @param {string} email The user's email address.
 	 * @returns {ProvidersForEmailResponse}
 	 */
-	async fetchProvidersForEmail(email) {
+	async fetchProvidersForEmail(email: string) {
 		const response = await this.api('createAuthUri', { identifier: email, continueUri: location.href });
 		delete response.kind;
 		return response;
@@ -402,7 +431,7 @@ export default class Auth {
 	async fetchProfile(tokenManager = this.user && this.user.tokenManager) {
 		!this.user && !tokenManager && (await this.enforceAuth());
 
-		const userData = (await this.api('lookup', { idToken: tokenManager.idToken })).users[0];
+		const userData = (await this.api('lookup', { idToken: tokenManager?.idToken })).users[0];
 
 		delete userData.kind;
 		userData.tokenManager = tokenManager;
@@ -415,14 +444,14 @@ export default class Auth {
 	 * @param {Object} newData An object with the new data to overwrite.
 	 * @throws Will throw if the user is not signed in.
 	 */
-	async updateProfile(newData) {
+	async updateProfile(newData: User) {
 		await this.enforceAuth();
 
 		// Calculate the expiration date for the idToken.
 		const expiresAt = Date.now() + 3600 * 1000;
 		const updatedData = await this.api('update', {
 			...newData,
-			idToken: this.user.tokenManager.idToken,
+			idToken: this.user?.tokenManager.idToken,
 			returnSecureToken: true
 		});
 
@@ -433,7 +462,7 @@ export default class Auth {
 				expiresAt
 			};
 		} else {
-			updatedData.tokenManager = this.user.tokenManager;
+			updatedData.tokenManager = this.user?.tokenManager;
 		}
 
 		delete updatedData.kind;
@@ -450,7 +479,7 @@ export default class Auth {
 	async deleteAccount() {
 		await this.enforceAuth();
 
-		await this.api('delete', `{"idToken": "${this.user.tokenManager.idToken}"}`);
+		await this.api('delete', `{"idToken": "${this.user?.tokenManager.idToken}"}`);
 
 		this.signOut();
 	}
