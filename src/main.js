@@ -45,19 +45,19 @@ export default class Auth {
 		 * @private
 		 */
 		this.listeners = [];
-
-		/**
-		 * User data if the user is logged in, else its null.
-		 * @type {Object|null}
-		 */
-		this.user = JSON.parse(localStorage.getItem(`Auth:User:${this.apiKey}:${this.name}`));
-
 		Object.assign(this, {
 			name,
 			apiKey,
 			redirectUri,
 			providers: {}
 		});
+
+		/**
+		 * User data if the user is logged in, else its null.
+		 * @type {Object|null}
+		 */
+		this.user = JSON.parse(localStorage.getItem(this._localStoreKey));
+
 
 		for (let options of providers) {
 			const { name, scope } = typeof options === 'string' ? { name: options } : options;
@@ -69,6 +69,12 @@ export default class Auth {
 			this.fetchProfile();
 		}
 	}
+
+  get _localStoreKey() {
+    if(!this.apiKey || !this.name) throw Error('You must set both apiKey and name to use firebase-auth-lite');
+
+    return `Auth:User:${this.apiKey}:${this.name}`;
+  }
 
 	/**
 	 * Emits an event and triggers all of the listeners.
@@ -136,7 +142,7 @@ export default class Auth {
 	 */
 	persistSession(userData) {
 		// Persist the session to the local storage.
-		localStorage.setItem(`Auth:User:${this.apiKey}:${this.name}`, JSON.stringify(userData));
+		localStorage.setItem(this._localStoreKey, JSON.stringify(userData));
 		this.user = userData;
 		this.emit();
 	}
@@ -146,7 +152,7 @@ export default class Auth {
 	 * Removes all data stored in the localStorage that's associated with the user.
 	 */
 	signOut() {
-		localStorage.removeItem(`Auth:User:${this.apiKey}:${this.name}`);
+		localStorage.removeItem(this._localStoreKey);
 		this.emit();
 		this.user = null;
 	}
