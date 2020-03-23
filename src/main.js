@@ -37,7 +37,7 @@ import humanReadableErrors from './errors.json';
  */
 export default class Auth {
 	constructor({ name = 'default', apiKey, redirectUri, providers = [] }) {
-		if (!redirectUri) throw Error('The argument "redirectUri" is required');
+		if (!apiKey) throw Error('The argument "apiKey" is required');
 		if (!Array.isArray(providers)) throw Error('The argument "providers" must be an array');
 
 		/**
@@ -50,7 +50,7 @@ export default class Auth {
 		 * User data if the user is logged in, else its null.
 		 * @type {Object|null}
 		 */
-		this.user = JSON.parse(localStorage.getItem(`Auth:User:${this.apiKey}:${this.name}`));
+		this.user = JSON.parse(localStorage.getItem(`Auth:User:${apiKey}:${name}`));
 
 		Object.assign(this, {
 			name,
