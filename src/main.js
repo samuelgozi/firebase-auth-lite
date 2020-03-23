@@ -147,8 +147,8 @@ export default class Auth {
 	 */
 	signOut() {
 		localStorage.removeItem(`Auth:User:${this.apiKey}:${this.name}`);
-		this.emit();
 		this.user = null;
+		this.emit();
 	}
 
 	/**
