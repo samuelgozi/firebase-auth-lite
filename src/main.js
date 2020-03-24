@@ -28,6 +28,11 @@ import humanReadableErrors from './errors.json';
  * @property {boolean} [linkAccount = false] Whether to link this oauth account with the current account. defaults to false.
  */
 
+// Generate a local storage adapter.
+// Its a bit verbose, but takes less characters than writing it manually.
+const localStorageAdapter = {};
+['set', 'get', 'delete'].forEach(m => (localStorageAdapter[m] = async (k, v) => localStorage[m + 'Item'](k, v)));
+
 /**
  * Encapsulates authentication flow logic.
  * @param {Object} options Options object.
@@ -36,27 +41,17 @@ import humanReadableErrors from './errors.json';
  * @param {Array.<ProviderOptions|string>} options.providers Array of arguments that will be passed to the addProvider method.
  */
 export default class Auth {
-	constructor({ name = 'default', apiKey, redirectUri, providers = [] }) {
+	constructor({ name = 'default', apiKey, redirectUri, providers = [], storage = localStorage }) {
 		if (!apiKey) throw Error('The argument "apiKey" is required');
 		if (!Array.isArray(providers)) throw Error('The argument "providers" must be an array');
-
-		/**
-		 * Event listener's callbacks.
-		 * @private
-		 */
-		this.listeners = [];
-
-		/**
-		 * User data if the user is logged in, else its null.
-		 * @type {Object|null}
-		 */
-		this.user = JSON.parse(localStorage.getItem(`Auth:User:${apiKey}:${name}`));
 
 		Object.assign(this, {
 			name,
 			apiKey,
+			storage,
 			redirectUri,
-			providers: {}
+			providers: {},
+			listeners: []
 		});
 
 		for (let options of providers) {
@@ -64,10 +59,14 @@ export default class Auth {
 			this.providers[name] = scope;
 		}
 
-		if (this.user) {
-			this.emit();
-			this.fetchProfile();
-		}
+		this.storage.get(`Auth:User:${apiKey}:${name}`).then(user => {
+			this.user = user;
+
+			if (user) {
+				this.emit();
+				this.fetchProfile();
+			}
+		});
 	}
 
 	/**
@@ -134,19 +133,19 @@ export default class Auth {
 	 * @param {Object} credentials
 	 * @private
 	 */
-	persistSession(userData) {
+	async persistSession(userData) {
 		// Persist the session to the local storage.
-		localStorage.setItem(`Auth:User:${this.apiKey}:${this.name}`, JSON.stringify(userData));
+		await this.storage.set(`Auth:User:${this.apiKey}:${this.name}`, userData);
 		this.user = userData;
 		this.emit();
 	}
 
 	/**
 	 * Sign out the currently signed in user.
-	 * Removes all data stored in the localStorage that's associated with the user.
+	 * Removes all data stored in the storage that's associated with the user.
 	 */
-	signOut() {
-		localStorage.removeItem(`Auth:User:${this.apiKey}:${this.name}`);
+	async signOut() {
+		await this.storage.remove(`Auth:User:${this.apiKey}:${this.name}`);
 		this.emit();
 		this.user = null;
 	}
@@ -161,8 +160,8 @@ export default class Auth {
 		if (Date.now() < this.user.tokenManager.expiresAt) return;
 
 		// If a request for a new token was already made, then wait for it and then return.
-		if (this.refreshTokenRequest) {
-			return await this.refreshTokenRequest;
+		if (this.refreshRequest) {
+			return await this.refreshRequest;
 		}
 
 		try {
@@ -171,19 +170,20 @@ export default class Auth {
 
 			// Save the promise so that if this function is called
 			// anywhere else we don't make more than one request.
-			this.refreshTokenRequest = this.api('token', {
+			this.refreshRequest = this.api('token', {
 				grant_type: 'refresh_token',
 				refresh_token: this.user.tokenManager.refreshToken
-			}).then(({ id_token: idToken, refresh_token: refreshToken }) => {
-				// Merge the new data with the old data and save it locally.
-				this.persistSession({
-					...this.user,
-					// Rename the data names to match the ones used in the app.
-					tokenManager: { idToken, refreshToken, expiresAt }
-				});
+			});
+
+			const { id_token: idToken, refresh_token: refreshToken } = await this.refreshRequest();
+
+			await this.persistSession({
+				...this.user,
+				// Rename the data names to match the ones used in the app.
+				tokenManager: { idToken, refreshToken, expiresAt }
 			});
 		} catch (e) {
-			this.refreshTokenRequest = null;
+			this.refreshRequest = null;
 			throw e;
 		}
 	}
@@ -252,9 +252,9 @@ export default class Auth {
 		// Save the sessionId that we just received in the local storage.
 		// Is required to finish the auth flow, I believe this is used to mitigate CSRF attacks.
 		// (No docs on this...)
-		sessionStorage.setItem(`Auth:SessionId:${this.apiKey}:${this.name}`, sessionId);
+		await this.storage.set(`Auth:SessionId:${this.apiKey}:${this.name}`, sessionId);
 		// Save if this is a fresh log-in or a "link account" request.
-		linkAccount && sessionStorage.setItem(`Auth:LinkAccount:${this.apiKey}:${this.name}`, true);
+		linkAccount && (await this.storage.set(`Auth:LinkAccount:${this.apiKey}:${this.name}`, true));
 
 		// Finally - redirect the page to the auth endpoint.
 		location.href = authUri;
@@ -267,13 +267,14 @@ export default class Auth {
 	 * @private
 	 */
 	async finishProviderSignIn(requestUri = location.href) {
-		// Get the sessionId we received before the redirect from sessionStorage.
-		const sessionId = sessionStorage.getItem(`Auth:SessionId:${this.apiKey}:${this.name}`);
-
+		// Get the sessionId we received before the redirect from storage.
+		const sessionId = await this.storage.get(`Auth:SessionId:${this.apiKey}:${this.name}`);
 		// Get the indication if this was a "link account" request.
-		const linkAccount = sessionStorage.getItem(`Auth:LinkAccount:${this.apiKey}:${this.name}`);
+		const linkAccount = await this.storage.get(`Auth:LinkAccount:${this.apiKey}:${this.name}`);
+		// Check for the edge case in which the user signed out before completing the linkAccount
+		// Request.
 		if (linkAccount && !this.user) throw Error('Request to "Link account" was made, but user is no longer signed-in');
-		sessionStorage.removeItem(`Auth:LinkAccount:${this.apiKey}:${this.name}`);
+		await this.storage.remove(`Auth:LinkAccount:${this.apiKey}:${this.name}`);
 
 		// Calculate the expiration date for the idToken.
 		const expiresAt = Date.now() + 3600 * 1000;
@@ -407,7 +408,7 @@ export default class Auth {
 		delete userData.kind;
 		userData.tokenManager = tokenManager;
 
-		this.persistSession(userData);
+		await this.persistSession(userData);
 	}
 
 	/**
@@ -440,7 +441,7 @@ export default class Auth {
 		delete updatedData.idToken;
 		delete updatedData.refreshToken;
 
-		this.persistSession(updatedData);
+		await this.persistSession(updatedData);
 	}
 
 	/**
