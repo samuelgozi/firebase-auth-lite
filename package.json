@@ -4,13 +4,14 @@
 	"description": "A lightweight firebase auth alternative for the browser",
 	"author": "Samuel Elgozi <samu.elgozi@gmail.com>",
 	"license": "MIT",
-	"main": "src/main.js",
+	"main": "build/main.js",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/samuelgozi/firebase-auth-lite.git"
 	},
 	"files": [
-		"src"
+		"src",
+		"build"
 	],
 	"devDependencies": {
 		"@babel/core": "^7.8.7",

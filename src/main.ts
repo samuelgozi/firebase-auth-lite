@@ -14,13 +14,31 @@ type Provider = {
   scope: unknown;
 }
 
+type AsyncStorage = {
+  getItem: (key: string) => Promise<string | null>;
+  removeItem: (key: string) => Promise<void>;
+  setItem: (key: string, value: string) => Promise<void>;
+};
+
 type AuthOptions = {
   apiKey: string;
-  name: string;
-  providers: Array<Provider | string>;
+  name?: string;
+  providers?: Array<Provider | string>;
   redirectUri?: string;
-  storage: Storage;
+  storage?: AsyncStorage;
 };
+
+const localStorageAdapter: AsyncStorage = {
+  getItem: async (key) => {
+    return await localStorage.getItem(key);
+  },
+  removeItem: async (key) => {
+    return await localStorage.removeItem(key);
+  },
+  setItem: async (key, value) => {
+    return await localStorage.setItem(key, value);
+  },
+}
 
 /**
  * Settings object for an IDP(Identity Provider).
@@ -61,8 +79,9 @@ export default class Auth {
   redirectUri?: string;
   refreshTokenRequest: Promise<unknown> | null = null;
   user: User | null;
+  storage: AsyncStorage;
 
-	constructor({ name = 'default', apiKey, redirectUri, providers = [] }: AuthOptions) {
+	constructor({ name = 'default', apiKey, redirectUri, providers = [], storage = localStorageAdapter }: AuthOptions) {
 		if (!apiKey) throw Error('The argument "apiKey" is required');
 		if (!Array.isArray(providers)) throw Error('The argument "providers" must be an array');
 
@@ -72,12 +91,8 @@ export default class Auth {
 		 */
 		this.listeners = [];
 
-		/**
-		 * User data if the user is logged in, else its null.
-		 * @type {Object|null}
-		 */
-    const storedUser = localStorage.getItem(`Auth:User:${apiKey}:${name}`);
-		this.user = storedUser ? JSON.parse(storedUser) : null;
+    this.storage = storage;
+    this.user = null;
 
 		Object.assign(this, {
 			name,
@@ -91,11 +106,25 @@ export default class Auth {
 			this.providers[name] = scope;
 		}
 
+    this._initUser();
+	}
+
+  async _initUser() {
+		/**
+		 * User data if the user is logged in, else its null.
+		 * @type {Object|null}
+		 */
+    const storedUser = await this.storage.getItem(`Auth:User:${this.apiKey}:${this.name}`);
+		this.user = storedUser ? JSON.parse(storedUser) : null;
 		if (this.user) {
 			this.emit();
 			this.fetchProfile();
 		}
-	}
+  }
+
+  get currentUser () {
+    return this.user;
+  }
 
 	/**
 	 * Emits an event and triggers all of the listeners.
@@ -111,7 +140,7 @@ export default class Auth {
 	 * Set up a function that will be called whenever the user state is changed.
 	 * @param {function} cb The function to call when the event is triggered.
 	 */
-	listen(cb: UserCallback) {
+	onAuthStateChanged(cb: UserCallback) {
 		this.listeners.push(cb);
 
 		// Return a function to unbind the callback.
@@ -161,19 +190,19 @@ export default class Auth {
 	 * @param {Object} credentials
 	 * @private
 	 */
-	persistSession(userData: User) {
+	async persistSession(userData: User) {
 		// Persist the session to the local storage.
-		localStorage.setItem(`Auth:User:${this.apiKey}:${this.name}`, JSON.stringify(userData));
+		await this.storage.setItem(`Auth:User:${this.apiKey}:${this.name}`, JSON.stringify(userData));
 		this.user = userData;
 		this.emit();
 	}
 
 	/**
 	 * Sign out the currently signed in user.
-	 * Removes all data stored in the localStorage that's associated with the user.
+	 * Removes all data stored in the storage that's associated with the user.
 	 */
-	signOut() {
-		localStorage.removeItem(`Auth:User:${this.apiKey}:${this.name}`);
+	async signOut() {
+		await this.storage.removeItem(`Auth:User:${this.apiKey}:${this.name}`);
 		this.user = null;
 		this.emit();
 	}
@@ -183,9 +212,9 @@ export default class Auth {
 	 * only if the idToken has expired.
 	 * @private
 	 */
-	async refreshIdToken() {
+	async refreshIdToken(forceRefresh?: boolean) {
 		// If the idToken didn't expire, return.
-		if (Date.now() < (this.user?.tokenManager.expiresAt ?? 0)) return;
+		if (!forceRefresh && Date.now() < (this.user?.tokenManager.expiresAt ?? 0)) return;
 
 		// If a request for a new token was already made, then wait for it and then return.
 		if (this.refreshTokenRequest) {
@@ -203,7 +232,7 @@ export default class Auth {
 				refresh_token: this.user?.tokenManager.refreshToken
 			}).then(({ id_token: idToken, refresh_token: refreshToken }) => {
 				// Merge the new data with the old data and save it locally.
-				this.persistSession({
+				return this.persistSession({
 					...this.user!,
 					// Rename the data names to match the ones used in the app.
 					tokenManager: { idToken, refreshToken, expiresAt }
@@ -213,6 +242,7 @@ export default class Auth {
 			this.refreshTokenRequest = null;
 			throw e;
 		}
+    return this.refreshTokenRequest;
 	}
 
 	/**
@@ -436,7 +466,7 @@ export default class Auth {
 		delete userData.kind;
 		userData.tokenManager = tokenManager;
 
-		this.persistSession(userData);
+		await this.persistSession(userData);
 	}
 
 	/**
@@ -469,7 +499,7 @@ export default class Auth {
 		delete updatedData.idToken;
 		delete updatedData.refreshToken;
 
-		this.persistSession(updatedData);
+		await this.persistSession(updatedData);
 	}
 
 	/**
