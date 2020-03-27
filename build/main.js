@@ -1,6 +1,4 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-const errors_json_1 = require("./errors.json");
+import humanReadableErrors from './errors.json';
 const localStorageAdapter = {
     getItem: async (key) => {
         return await localStorage.getItem(key);
@@ -40,7 +38,7 @@ const localStorageAdapter = {
  * @param {string} options.redirectUri The redirect URL used by OAuth providers.
  * @param {Array.<ProviderOptions|string>} options.providers Array of arguments that will be passed to the addProvider method.
  */
-class Auth {
+export default class Auth {
     constructor({ name = 'default', apiKey, redirectUri, providers = [], storage = localStorageAdapter }) {
         this.refreshTokenRequest = null;
         if (!apiKey)
@@ -117,7 +115,7 @@ class Auth {
             // If the response has an error, check to see if we have a human readable version of it,
             // and throw that instead.
             if (!response.ok) {
-                throw Error(errors_json_1.default[data.error.message] || data.error.message);
+                throw Error(humanReadableErrors[data.error.message] || data.error.message);
             }
             return data;
         });
@@ -428,4 +426,3 @@ class Auth {
         this.signOut();
     }
 }
-exports.default = Auth;
