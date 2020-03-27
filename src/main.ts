@@ -2,7 +2,7 @@
  * Full documentation for the "identitytoolkit" API can be found here:
  * https://cloud.google.com/identity-platform/docs/reference/rest/v1/accounts
  */
-import type { ActionCodeInfo, UserInfo as FBUser } from '@firebase/auth-types';
+import { ActionCodeInfo, UserInfo as FBUser } from '@firebase/auth-types';
 import humanReadableErrors from './errors.json';
 
 type User = FBUser & { tokenManager: { idToken: string, refreshToken: string, expiresAt: number } };
@@ -80,6 +80,7 @@ export default class Auth {
   refreshTokenRequest: Promise<unknown> | null = null;
   user: User | null;
   storage: AsyncStorage;
+  initialized: boolean = false;
 
 	constructor({ name = 'default', apiKey, redirectUri, providers = [], storage = localStorageAdapter }: AuthOptions) {
 		if (!apiKey) throw Error('The argument "apiKey" is required');
@@ -116,9 +117,10 @@ export default class Auth {
 		 */
     const storedUser = await this.storage.getItem(`Auth:User:${this.apiKey}:${this.name}`);
 		this.user = storedUser ? JSON.parse(storedUser) : null;
+    this.emit();
+    this.initialized = true;
 		if (this.user) {
-			this.emit();
-			this.fetchProfile();
+			await this.fetchProfile();
 		}
   }
 
@@ -142,6 +144,10 @@ export default class Auth {
 	 */
 	onAuthStateChanged(cb: UserCallback) {
 		this.listeners.push(cb);
+
+    if (this.initialized && this.listeners.length === 1) {
+      cb(this.user);
+    }
 
 		// Return a function to unbind the callback.
 		return () => (this.listeners = this.listeners.filter(fn => fn !== cb));

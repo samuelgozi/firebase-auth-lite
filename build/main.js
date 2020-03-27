@@ -41,6 +41,7 @@ const localStorageAdapter = {
 export default class Auth {
     constructor({ name = 'default', apiKey, redirectUri, providers = [], storage = localStorageAdapter }) {
         this.refreshTokenRequest = null;
+        this.initialized = false;
         if (!apiKey)
             throw Error('The argument "apiKey" is required');
         if (!Array.isArray(providers))
@@ -71,9 +72,10 @@ export default class Auth {
          */
         const storedUser = await this.storage.getItem(`Auth:User:${this.apiKey}:${this.name}`);
         this.user = storedUser ? JSON.parse(storedUser) : null;
+        this.emit();
+        this.initialized = true;
         if (this.user) {
-            this.emit();
-            this.fetchProfile();
+            await this.fetchProfile();
         }
     }
     get currentUser() {
@@ -94,6 +96,9 @@ export default class Auth {
      */
     onAuthStateChanged(cb) {
         this.listeners.push(cb);
+        if (this.initialized && this.listeners.length === 1) {
+            cb(this.user);
+        }
         // Return a function to unbind the callback.
         return () => (this.listeners = this.listeners.filter(fn => fn !== cb));
     }

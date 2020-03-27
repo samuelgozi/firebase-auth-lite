@@ -2,7 +2,7 @@
  * Full documentation for the "identitytoolkit" API can be found here:
  * https://cloud.google.com/identity-platform/docs/reference/rest/v1/accounts
  */
-import type { ActionCodeInfo, UserInfo as FBUser } from '@firebase/auth-types';
+import { ActionCodeInfo, UserInfo as FBUser } from '@firebase/auth-types';
 declare type User = FBUser & {
     tokenManager: {
         idToken: string;
@@ -64,6 +64,7 @@ export default class Auth {
     refreshTokenRequest: Promise<unknown> | null;
     user: User | null;
     storage: AsyncStorage;
+    initialized: boolean;
     constructor({ name, apiKey, redirectUri, providers, storage }: AuthOptions);
     _initUser(): Promise<void>;
     get currentUser(): User | null;
