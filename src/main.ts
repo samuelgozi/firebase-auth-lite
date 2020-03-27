@@ -117,8 +117,8 @@ export default class Auth {
 		 */
     const storedUser = await this.storage.getItem(`Auth:User:${this.apiKey}:${this.name}`);
 		this.user = storedUser ? JSON.parse(storedUser) : null;
-    this.emit();
     this.initialized = true;
+    this.emit();
 		if (this.user) {
 			await this.fetchProfile();
 		}
@@ -145,7 +145,7 @@ export default class Auth {
 	onAuthStateChanged(cb: UserCallback) {
 		this.listeners.push(cb);
 
-    if (this.initialized && this.listeners.length === 1) {
+    if (this.initialized) {
       cb(this.user);
     }
 
