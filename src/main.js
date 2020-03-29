@@ -31,7 +31,7 @@ import humanReadableErrors from './errors.json';
 // Generate a local storage adapter.
 // Its a bit verbose, but takes less characters than writing it manually.
 const localStorageAdapter = {};
-['set', 'get', 'delete'].forEach(m => (localStorageAdapter[m] = async (k, v) => localStorage[m + 'Item'](k, v)));
+['set', 'get', 'remove'].forEach(m => (localStorageAdapter[m] = async (k, v) => localStorage[m + 'Item'](k, v)));
 
 /**
  * Encapsulates authentication flow logic.
@@ -41,7 +41,7 @@ const localStorageAdapter = {};
  * @param {Array.<ProviderOptions|string>} options.providers Array of arguments that will be passed to the addProvider method.
  */
 export default class Auth {
-	constructor({ name = 'default', apiKey, redirectUri, providers = [], storage = localStorage }) {
+	constructor({ name = 'default', apiKey, redirectUri, providers = [], storage = localStorageAdapter }) {
 		if (!apiKey) throw Error('The argument "apiKey" is required');
 		if (!Array.isArray(providers)) throw Error('The argument "providers" must be an array');
 
@@ -450,9 +450,7 @@ export default class Auth {
 	 */
 	async deleteAccount() {
 		await this.enforceAuth();
-
 		await this.api('delete', `{"idToken": "${this.user.tokenManager.idToken}"}`);
-
 		this.signOut();
 	}
 }
