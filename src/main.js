@@ -146,8 +146,8 @@ export default class Auth {
 	 */
 	async signOut() {
 		await this.storage.remove(`Auth:User:${this.apiKey}:${this.name}`);
-		this.emit();
 		this.user = null;
+		this.emit();
 	}
 
 	/**
