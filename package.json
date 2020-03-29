@@ -1,6 +1,6 @@
 {
 	"name": "firebase-auth-lite",
-	"version": "0.5.4",
+	"version": "0.6.0",
 	"description": "A lightweight firebase auth alternative for the browser",
 	"author": "Samuel Elgozi <samu.elgozi@gmail.com>",
 	"license": "MIT",
@@ -9,16 +9,22 @@
 		"type": "git",
 		"url": "https://github.com/samuelgozi/firebase-auth-lite.git"
 	},
+	"scripts": {
+		"test": "jest"
+	},
 	"files": [
 		"src"
 	],
 	"devDependencies": {
-		"@babel/core": "^7.8.7",
-		"@babel/plugin-proposal-optional-chaining": "^7.8.3",
-		"@babel/plugin-proposal-private-methods": "^7.8.3",
+		"@babel/core": "^7.9.0",
+		"@babel/preset-env": "^7.9.0",
 		"babel-eslint": "11.0.0-beta.0",
+		"babel-jest": "^25.2.3",
+		"core-js": "^3.6.4",
 		"eslint": "^6.8.0",
 		"eslint-plugin-babel": "^5.3.0",
-		"eslint-plugin-jest": "^23.8.2"
+		"eslint-plugin-jest": "^23.8.2",
+		"jest": "^25.2.3",
+		"jest-fetch-mock": "^3.0.3"
 	}
 }
