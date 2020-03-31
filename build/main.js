@@ -218,95 +218,6 @@ export default class Auth {
         await this.fetchProfile({ idToken, refreshToken, expiresAt });
     }
     /**
-     * Start auth flow of a federated Id provider.
-     * Will redirect the page to the federated login page.
-     * @param {oauthFlowOptions|string} options An options object, or a string with the name of the provider.
-     */
-    async signInWithProvider(options) {
-        if (!this.redirectUri)
-            throw Error('In order to use an Identity provider you should initiate the "Auth" instance with a "redirectUri".');
-        // Make sure the user is logged in when an "account link" was requested.
-        if (typeof options === 'object' && options.linkAccount)
-            await this.enforceAuth();
-        // The options can be a string, or an object, so here we make sure we extract the right data in each case.
-        const { provider, context, linkAccount } = typeof options === 'string'
-            ? { provider: options, context: undefined, linkAccount: undefined }
-            : options;
-        // Get an array of the allowed providers names.
-        const allowedProviders = Object.keys(this.providers);
-        // Verify that the requested provider is indeed configured.
-        if (!allowedProviders.includes(provider))
-            throw Error(`You haven't configured "${provider}" with this "Auth" instance.`);
-        // Get the url and other data necessary for the authentication.
-        const { authUri, sessionId } = await this.api('createAuthUri', {
-            providerId: provider,
-            continueUri: this.redirectUri,
-            oauthScope: this.providers[provider],
-            authFlowType: 'CODE_FLOW',
-            context
-        });
-        // Save the sessionId that we just received in the local storage.
-        // Is required to finish the auth flow, I believe this is used to mitigate CSRF attacks.
-        // (No docs on this...)
-        sessionStorage.setItem(`Auth:SessionId:${this.apiKey}:${this.name}`, sessionId);
-        // Save if this is a fresh log-in or a "link account" request.
-        linkAccount && sessionStorage.setItem(`Auth:LinkAccount:${this.apiKey}:${this.name}`, 'true');
-        // Finally - redirect the page to the auth endpoint.
-        location.href = authUri;
-    }
-    /**
-     * Signs in or signs up a user using credentials from an Identity Provider (IdP) after a redirect.
-     * Will fail silently if the URL doesn't have a "code" search param.
-     * @param {string} [requestUri] The request URI with the authorization code, state etc. from the IdP.
-     * @private
-     */
-    async finishProviderSignIn(requestUri = location.href) {
-        var _a;
-        // Get the sessionId we received before the redirect from sessionStorage.
-        const sessionId = sessionStorage.getItem(`Auth:SessionId:${this.apiKey}:${this.name}`);
-        // Get the indication if this was a "link account" request.
-        const linkAccount = sessionStorage.getItem(`Auth:LinkAccount:${this.apiKey}:${this.name}`);
-        if (linkAccount && !this.user)
-            throw Error('Request to "Link account" was made, but user is no longer signed-in');
-        sessionStorage.removeItem(`Auth:LinkAccount:${this.apiKey}:${this.name}`);
-        // Calculate the expiration date for the idToken.
-        const expiresAt = Date.now() + 3600 * 1000;
-        // Try to exchange the Auth Code for an idToken and refreshToken.
-        const { idToken, refreshToken, context } = await this.api('signInWithIdp', {
-            // If this is a "link account" flow, then attach the idToken of the currently logged in account.
-            idToken: linkAccount ? (_a = this.user) === null || _a === void 0 ? void 0 : _a.tokenManager.idToken : undefined,
-            requestUri,
-            sessionId,
-            returnSecureToken: true
-        });
-        // Now get the user profile.
-        await this.fetchProfile({ idToken, refreshToken, expiresAt });
-        // Remove sensitive data from the URLSearch params in the location bar.
-        history.replaceState(null, '', location.origin + location.pathname);
-        return context;
-    }
-    /**
-     * Handles all sign in flows that complete via redirects.
-     * Fails silently if no redirect was detected.
-     */
-    async handleSignInRedirect() {
-        var _a, _b;
-        // Oauth Federated Identity Provider flow.
-        if (location.href.match(/[&?]code=/))
-            return this.finishProviderSignIn();
-        // Email Sign-in flow.
-        if (location.href.match(/[&?]oobCode=/)) {
-            const oobCode = (_a = location.href.match(/[?&]oobCode=([^&]+)/)) === null || _a === void 0 ? void 0 : _a[1];
-            const email = (_b = location.href.match(/[?&]email=([^&]+)/)) === null || _b === void 0 ? void 0 : _b[1];
-            const expiresAt = Date.now() + 3600 * 1000;
-            const { idToken, refreshToken } = await this.api('signInWithEmailLink', { oobCode, email });
-            // Now get the user profile.
-            await this.fetchProfile({ idToken, refreshToken, expiresAt });
-            // Remove sensitive data from the URLSearch params in the location bar.
-            history.replaceState(null, '', location.origin + location.pathname);
-        }
-    }
-    /**
      * Signs up with email and password or anonymously when no arguments are passed.
      * Automatically signs the user in on completion.
      * @param {string} [email] The email for the user to create.
@@ -340,45 +251,6 @@ export default class Auth {
         await this.fetchProfile({ idToken, refreshToken, expiresAt });
     }
     /**
-     * Sends an out-of-band confirmation code for an account.
-     * Can be used to reset a password, to verify an email address and send a Sign-in email link.
-     * The `email` argument is not needed only when verifying an email(In that case it will be completely ignored, even if specified), otherwise it is required.
-     * @param {'PASSWORD_RESET'|'VERIFY_EMAIL'|'EMAIL_SIGNIN'} requestType The type of out-of-band (OOB) code to send.
-     * @param {string} [email] When the `requestType` is `PASSWORD_RESET` you need to provide an email address, else it will be ignored.
-     * @returns {Promise}
-     */
-    async sendOobCode(requestType, email) {
-        var _a;
-        const verifyEmail = requestType === 'VERIFY_EMAIL';
-        if (verifyEmail)
-            await this.enforceAuth();
-        return void this.api('sendOobCode', {
-            idToken: verifyEmail ? (_a = this.user) === null || _a === void 0 ? void 0 : _a.tokenManager.idToken : undefined,
-            requestType,
-            email,
-            continueUrl: this.redirectUri + `?email=${email}`
-        });
-    }
-    /**
-     * Sets a new password by using a reset code.
-     * Can also be used to very oobCode by not passing a password.
-     * @param {string} code
-     * @returns {string} The email of the account to which the code was issued.
-     */
-    async resetPassword(oobCode, newPassword) {
-        return (await this.api('resetPassword', { oobCode, newPassword })).email;
-    }
-    /**
-     * Returns info about all providers associated with a specified email.
-     * @param {string} email The user's email address.
-     * @returns {ProvidersForEmailResponse}
-     */
-    async fetchProvidersForEmail(email) {
-        const response = await this.api('createAuthUri', { identifier: email, continueUri: location.href });
-        delete response.kind;
-        return response;
-    }
-    /**
      * Gets the user data from the server, and updates the local caches.
      * @param {Object} [tokenManager] Only when not logged in.
      * @throws Will throw if the user is not signed in.
@@ -389,45 +261,5 @@ export default class Auth {
         delete userData.kind;
         userData.tokenManager = tokenManager;
         await this.persistSession(userData);
-    }
-    /**
-     * Update user's profile.
-     * @param {Object} newData An object with the new data to overwrite.
-     * @throws Will throw if the user is not signed in.
-     */
-    async updateProfile(newData) {
-        var _a, _b;
-        await this.enforceAuth();
-        // Calculate the expiration date for the idToken.
-        const expiresAt = Date.now() + 3600 * 1000;
-        const updatedData = await this.api('update', {
-            ...newData,
-            idToken: (_a = this.user) === null || _a === void 0 ? void 0 : _a.tokenManager.idToken,
-            returnSecureToken: true
-        });
-        if (updatedData.idToken) {
-            updatedData.tokenManager = {
-                idToken: updatedData.idToken,
-                refreshToken: updatedData.refreshToken,
-                expiresAt
-            };
-        }
-        else {
-            updatedData.tokenManager = (_b = this.user) === null || _b === void 0 ? void 0 : _b.tokenManager;
-        }
-        delete updatedData.kind;
-        delete updatedData.idToken;
-        delete updatedData.refreshToken;
-        await this.persistSession(updatedData);
-    }
-    /**
-     * Deletes the currently logged in account and logs out.
-     * @throws Will throw if the user is not signed in.
-     */
-    async deleteAccount() {
-        var _a;
-        await this.enforceAuth();
-        await this.api('delete', `{"idToken": "${(_a = this.user) === null || _a === void 0 ? void 0 : _a.tokenManager.idToken}"}`);
-        this.signOut();
     }
 }
