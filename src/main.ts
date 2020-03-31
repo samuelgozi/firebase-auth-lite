@@ -22,6 +22,7 @@ type AsyncStorage = {
 
 type AuthOptions = {
   apiKey: string;
+  lazyInit?: boolean;
   name?: string;
   providers?: Array<Provider | string>;
   redirectUri?: string;
@@ -82,7 +83,7 @@ export default class Auth {
   storage: AsyncStorage;
   initialized: boolean = false;
 
-	constructor({ name = 'default', apiKey, redirectUri, providers = [], storage = localStorageAdapter }: AuthOptions) {
+	constructor({ name = 'default', apiKey, redirectUri, providers = [], storage = localStorageAdapter, lazyInit }: AuthOptions) {
 		if (!apiKey) throw Error('The argument "apiKey" is required');
 		if (!Array.isArray(providers)) throw Error('The argument "providers" must be an array');
 
@@ -107,10 +108,12 @@ export default class Auth {
 			this.providers[name] = scope;
 		}
 
-    this._initUser();
+    if (!lazyInit) {
+      this.initUser();
+    }
 	}
 
-  async _initUser() {
+  async initUser() {
 		/**
 		 * User data if the user is logged in, else its null.
 		 * @type {Object|null}

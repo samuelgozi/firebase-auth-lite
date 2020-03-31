@@ -39,7 +39,7 @@ const localStorageAdapter = {
  * @param {Array.<ProviderOptions|string>} options.providers Array of arguments that will be passed to the addProvider method.
  */
 export default class Auth {
-    constructor({ name = 'default', apiKey, redirectUri, providers = [], storage = localStorageAdapter }) {
+    constructor({ name = 'default', apiKey, redirectUri, providers = [], storage = localStorageAdapter, lazyInit }) {
         this.refreshTokenRequest = null;
         this.initialized = false;
         if (!apiKey)
@@ -63,9 +63,11 @@ export default class Auth {
             const { name, scope } = typeof options === 'string' ? { name: options, scope: undefined } : options;
             this.providers[name] = scope;
         }
-        this._initUser();
+        if (!lazyInit) {
+            this.initUser();
+        }
     }
-    async _initUser() {
+    async initUser() {
         /**
          * User data if the user is logged in, else its null.
          * @type {Object|null}

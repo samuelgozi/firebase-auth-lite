@@ -2,7 +2,7 @@
  * Full documentation for the "identitytoolkit" API can be found here:
  * https://cloud.google.com/identity-platform/docs/reference/rest/v1/accounts
  */
-import { ActionCodeInfo, UserInfo as FBUser } from '@firebase/auth-types';
+import { UserInfo as FBUser } from '@firebase/auth-types';
 declare type User = FBUser & {
     tokenManager: {
         idToken: string;
@@ -22,6 +22,7 @@ declare type AsyncStorage = {
 };
 declare type AuthOptions = {
     apiKey: string;
+    lazyInit?: boolean;
     name?: string;
     providers?: Array<Provider | string>;
     redirectUri?: string;
@@ -65,8 +66,8 @@ export default class Auth {
     user: User | null;
     storage: AsyncStorage;
     initialized: boolean;
-    constructor({ name, apiKey, redirectUri, providers, storage }: AuthOptions);
-    _initUser(): Promise<void>;
+    constructor({ name, apiKey, redirectUri, providers, storage, lazyInit }: AuthOptions);
+    initUser(): Promise<void>;
     get currentUser(): User | null;
     /**
      * Emits an event and triggers all of the listeners.
@@ -122,28 +123,6 @@ export default class Auth {
      */
     signInWithCustomToken(token: string): Promise<void>;
     /**
-     * Start auth flow of a federated Id provider.
-     * Will redirect the page to the federated login page.
-     * @param {oauthFlowOptions|string} options An options object, or a string with the name of the provider.
-     */
-    signInWithProvider(options: string | {
-        provider: string;
-        context: unknown;
-        linkAccount: boolean;
-    }): Promise<void>;
-    /**
-     * Signs in or signs up a user using credentials from an Identity Provider (IdP) after a redirect.
-     * Will fail silently if the URL doesn't have a "code" search param.
-     * @param {string} [requestUri] The request URI with the authorization code, state etc. from the IdP.
-     * @private
-     */
-    finishProviderSignIn(requestUri?: string): Promise<any>;
-    /**
-     * Handles all sign in flows that complete via redirects.
-     * Fails silently if no redirect was detected.
-     */
-    handleSignInRedirect(): Promise<any>;
-    /**
      * Signs up with email and password or anonymously when no arguments are passed.
      * Automatically signs the user in on completion.
      * @param {string} [email] The email for the user to create.
@@ -157,28 +136,6 @@ export default class Auth {
      */
     signIn(email: string, password: string): Promise<void>;
     /**
-     * Sends an out-of-band confirmation code for an account.
-     * Can be used to reset a password, to verify an email address and send a Sign-in email link.
-     * The `email` argument is not needed only when verifying an email(In that case it will be completely ignored, even if specified), otherwise it is required.
-     * @param {'PASSWORD_RESET'|'VERIFY_EMAIL'|'EMAIL_SIGNIN'} requestType The type of out-of-band (OOB) code to send.
-     * @param {string} [email] When the `requestType` is `PASSWORD_RESET` you need to provide an email address, else it will be ignored.
-     * @returns {Promise}
-     */
-    sendOobCode(requestType: keyof typeof ActionCodeInfo.Operation, email?: string): Promise<undefined>;
-    /**
-     * Sets a new password by using a reset code.
-     * Can also be used to very oobCode by not passing a password.
-     * @param {string} code
-     * @returns {string} The email of the account to which the code was issued.
-     */
-    resetPassword(oobCode: string, newPassword: string): Promise<any>;
-    /**
-     * Returns info about all providers associated with a specified email.
-     * @param {string} email The user's email address.
-     * @returns {ProvidersForEmailResponse}
-     */
-    fetchProvidersForEmail(email: string): Promise<any>;
-    /**
      * Gets the user data from the server, and updates the local caches.
      * @param {Object} [tokenManager] Only when not logged in.
      * @throws Will throw if the user is not signed in.
@@ -188,16 +145,5 @@ export default class Auth {
         refreshToken: string;
         expiresAt: number;
     } | null): Promise<void>;
-    /**
-     * Update user's profile.
-     * @param {Object} newData An object with the new data to overwrite.
-     * @throws Will throw if the user is not signed in.
-     */
-    updateProfile(newData: User): Promise<void>;
-    /**
-     * Deletes the currently logged in account and logs out.
-     * @throws Will throw if the user is not signed in.
-     */
-    deleteAccount(): Promise<void>;
 }
 export {};
