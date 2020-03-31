@@ -41,8 +41,8 @@ const localStorageAdapter = {};
  * @param {Array.<ProviderOptions|string>} options.providers Array of arguments that will be passed to the addProvider method.
  */
 export default class Auth {
-	constructor({ name = 'default', apiKey, redirectUri, providers = [], storage = localStorageAdapter }) {
-		if (!apiKey) throw Error('The argument "apiKey" is required');
+	constructor({ name = 'default', apiKey, redirectUri, providers = [], storage = localStorageAdapter } = {}) {
+		if (typeof apiKey !== 'string') throw Error('The argument "apiKey" is required');
 		if (!Array.isArray(providers)) throw Error('The argument "providers" must be an array');
 
 		Object.assign(this, {
@@ -54,16 +54,15 @@ export default class Auth {
 			listeners: []
 		});
 
-		for (let options of providers) {
+		for (const options of providers) {
 			const { name, scope } = typeof options === 'string' ? { name: options } : options;
 			this.providers[name] = scope;
 		}
 
 		this.storage.get(`Auth:User:${apiKey}:${name}`).then(user => {
-			this.user = user;
+			this.user = JSON.parse(user);
 
 			if (user) {
-				this.emit();
 				this.fetchProfile();
 			}
 		});
@@ -123,7 +122,7 @@ export default class Auth {
 	 * @throws Will throw if the user is not logged in.
 	 * @private
 	 */
-	enforceAuth() {
+	async enforceAuth() {
 		if (!this.user) throw Error('The user must be logged-in to use this method.');
 		return this.refreshIdToken(); // Won't do anything if the token is valid.
 	}
@@ -135,7 +134,7 @@ export default class Auth {
 	 */
 	async persistSession(userData) {
 		// Persist the session to the local storage.
-		await this.storage.set(`Auth:User:${this.apiKey}:${this.name}`, userData);
+		await this.storage.set(`Auth:User:${this.apiKey}:${this.name}`, JSON.stringify(userData));
 		this.user = userData;
 		this.emit();
 	}
