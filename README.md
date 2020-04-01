@@ -1,4 +1,4 @@
-# Firebase auth lite (Beta) ![bundlephobia](https://badgen.net/bundlephobia/minzip/firebase-auth-lite)
+# Firebase auth lite (Beta) [![codecov](https://codecov.io/gh/samuelgozi/firebase-auth-lite/branch/master/graph/badge.svg)](https://codecov.io/gh/samuelgozi/firebase-auth-lite) ![bundlephobia](https://badgen.net/bundlephobia/minzip/firebase-auth-lite)
 
 A performance focused alternative to the official firebase auth library that is designed to work with my other alternatives for [storage](https://github.com/samuelgozi/firebase-storage-lite) and [firestore](https://github.com/samuelgozi/firebase-firestore-lite).
 
