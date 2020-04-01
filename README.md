@@ -161,15 +161,18 @@ auth.signUp();
 
 When working with reactive frameworks/libraries you will want to be able to tell when the user's data was updated.
 Its very easy to do with this library.
-in order to listen to state changes just add a callback:
+in order to listen to state changes just call `listen()` with a callback:
 
 ```js
-auth.onStateChange(user => {
+const removeListener = auth.listen(user => {
 	console.log(user); // Will log the user object.
 });
+
+removeListener(); // The callback will no longer be called on updates.
 ```
 
-When the user has just logged in, or the data was refreshed(due to page reload, or token expiration, which will reload all the users data automatically) the argument will be the user object. On sign-out the argument will be null.
+Now every time the user state or data is changed, the callback will be called with tne new data.
+The `listen()` method returns a function that can be called when we wish to stop listening for updates.
 
 # Full API Reference
 
