@@ -81,6 +81,7 @@ export default class Auth {
 	/**
 	 * Set up a function that will be called whenever the user state is changed.
 	 * @param {function} cb The function to call when the event is triggered.
+	 * @returns {function} function that will unsubscribe your callback from being called.
 	 */
 	listen(cb) {
 		this.listeners.push(cb);
@@ -156,7 +157,7 @@ export default class Auth {
 	 */
 	async refreshIdToken() {
 		// If the idToken didn't expire, return.
-		if (Date.now() < this.user.tokenManager.expiresAt) return;
+		if (Date.now() > this.user.tokenManager.expiresAt) return;
 
 		// If a request for a new token was already made, then wait for it and then return.
 		if (this.refreshRequest) {
@@ -174,16 +175,15 @@ export default class Auth {
 				refresh_token: this.user.tokenManager.refreshToken
 			});
 
-			const { id_token: idToken, refresh_token: refreshToken } = await this.refreshRequest();
+			const { id_token: idToken, refresh_token: refreshToken } = await this.refreshRequest;
 
 			await this.persistSession({
 				...this.user,
 				// Rename the data names to match the ones used in the app.
 				tokenManager: { idToken, refreshToken, expiresAt }
 			});
-		} catch (e) {
+		} finally {
 			this.refreshRequest = null;
-			throw e;
 		}
 	}
 

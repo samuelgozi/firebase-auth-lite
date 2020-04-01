@@ -246,4 +246,95 @@ describe('Auth', () => {
 			expect(callback).toHaveBeenCalledTimes(1);
 		});
 	});
+
+	describe('refreshIdToken()', () => {
+		test('Returns if token is still valid', async () => {
+			// The constructor makes some requests.
+			// We have to mock them for this not to throw
+			fetch.resetMocks();
+			fetch.mockResponse('{"users": [{ "updated": true }]}');
+
+			const auth = new Auth({ apiKey: 'key' });
+			// Mock logged in user.
+			auth.user = mockUserData;
+
+			await auth.refreshIdToken();
+
+			expect(fetch.mock.calls.length).toEqual(0);
+		});
+
+		test('Allow only one concurrent fetch request', async () => {
+			// The constructor makes some requests.
+			// We have to mock them for this not to throw
+			fetch.resetMocks();
+			fetch.mockResponse('{"users": [{ "updated": true }]}');
+
+			const auth = new Auth({ apiKey: 'key' });
+			// Mock logged in user.
+			auth.user = {
+				tokenManager: {
+					idToken: 'idTokenString',
+					// Mock old expiration time
+					expiresAt: Date.now() + 3600 * 1000
+				}
+			};
+
+			auth.refreshIdToken();
+			auth.refreshIdToken();
+			auth.refreshIdToken();
+			await auth.refreshIdToken();
+
+			expect(fetch.mock.calls.length).toEqual(1);
+		});
+
+		test('Sets correct expiration time', async () => {
+			// The constructor makes some requests.
+			// We have to mock them for this not to throw
+			fetch.resetMocks();
+			fetch.mockResponse('{"users": [{ "updated": true }]}');
+
+			const auth = new Auth({ apiKey: 'key' });
+			// Mock logged in user.
+			auth.user = {
+				tokenManager: {
+					idToken: 'idTokenString',
+					// Mock old expiration time
+					expiresAt: Date.now() - 1000
+				}
+			};
+
+			const expectedExpiration = Date.now() + 3600 * 1000;
+			await auth.refreshIdToken();
+
+			// Get the time difference in milliseconds.
+			const difference = Math.abs(expectedExpiration - auth.user.tokenManager.expiresAt);
+
+			// Check that the time is close enough by allowing
+			// a few milliseconds of delay, since the function takes time to run.
+			expect(difference < 5).toEqual(true);
+		});
+
+		test('Updates the user data', async () => {
+			// The constructor makes some requests.
+			// We have to mock them for this not to throw
+			fetch.resetMocks();
+			fetch.mockResponse('{"users": [{ "updated": true }]}');
+
+			const auth = new Auth({ apiKey: 'key' });
+			// Mock logged in user.
+			auth.user = {
+				tokenManager: {
+					idToken: 'idTokenString',
+					// Mock old expiration time
+					expiresAt: Date.now() - 1000
+				}
+			};
+
+			await auth.refreshIdToken();
+
+			// Check that the time is close enough by allowing
+			// a few milliseconds of delay, since the function takes time to run.
+			expect(auth.user.updated).toEqual(true);
+		});
+	});
 });
