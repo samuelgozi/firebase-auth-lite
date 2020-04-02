@@ -74,6 +74,9 @@ export default class Auth {
          */
         const storedUser = await this.storage.getItem(`Auth:User:${this.apiKey}:${this.name}`);
         this.user = storedUser ? JSON.parse(storedUser) : null;
+        if (this.user) {
+            await this.refreshIdToken();
+        }
         this.initialized = true;
         this.emit();
         if (this.user) {
