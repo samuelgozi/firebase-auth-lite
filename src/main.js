@@ -60,9 +60,8 @@ export default class Auth {
 		}
 
 		this.storage.get(`Auth:User:${apiKey}:${name}`).then(user => {
-			this.user = JSON.parse(user);
-
 			if (user) {
+				this.user = JSON.parse(user);
 				this.fetchProfile();
 			}
 		});
@@ -157,7 +156,7 @@ export default class Auth {
 	 */
 	async refreshIdToken() {
 		// If the idToken didn't expire, return.
-		if (Date.now() > this.user.tokenManager.expiresAt) return;
+		if (Date.now() < this.user.tokenManager.expiresAt) return;
 
 		// If a request for a new token was already made, then wait for it and then return.
 		if (this.refreshRequest) {
@@ -195,7 +194,7 @@ export default class Auth {
 	async authorizedRequest(resource, init) {
 		const request = resource instanceof Request ? resource : new Request(resource, init);
 
-		if (this.user !== null) {
+		if (this.user) {
 			await this.refreshIdToken(); // Won't do anything if the token didn't expire yet.
 			request.headers.set('Authorization', `Bearer ${this.user.tokenManager.idToken}`);
 		}

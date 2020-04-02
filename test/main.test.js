@@ -3,12 +3,17 @@ import Auth from '../src/main.js';
 const mockUserData = {
 	tokenManager: {
 		idToken: 'idTokenString',
-		expiresAt: Date.now()
+		expiresAt: Date.now() + 3600 * 1000 // In one hour from now.
 	}
 };
 
+afterEach(() => {
+	fetch.resetMocks();
+	localStorage.removeItem('Auth:User:key:default');
+});
+
 describe('localStorageAdapter()', () => {
-	const auth = new Auth({ apiKey: 'test' });
+	const auth = new Auth({ apiKey: 'key' });
 
 	test('Implements the right methods', () => {
 		const keys = ['set', 'get', 'remove'];
@@ -61,7 +66,6 @@ describe('Auth', () => {
 			test('Reads the username from storage when already logged in', async () => {
 				// The constructor makes some requests.
 				// We have to mock them for this not to throw
-				fetch.resetMocks();
 				fetch.mockResponse('{"users": [{}]}');
 
 				localStorage.setItem('Auth:User:key:default', JSON.stringify(mockUserData));
@@ -78,7 +82,6 @@ describe('Auth', () => {
 			test('Updates the stored data if the user is logged in', async () => {
 				// The constructor makes some requests.
 				// We have to mock them for this not to throw
-				fetch.resetMocks();
 				fetch.mockResponse('{"users": [{ "username": "updated!" }]}');
 
 				localStorage.setItem('Auth:User:key:default', JSON.stringify(mockUserData));
@@ -98,7 +101,6 @@ describe('Auth', () => {
 		test("Doesn't make any requests when the user is not logged in", async () => {
 			// The constructor makes some requests.
 			// We have to mock them for this not to throw
-			fetch.resetMocks();
 			fetch.mockResponse('{}');
 
 			await new Promise(resolve => {
@@ -164,7 +166,6 @@ describe('Auth', () => {
 		test("Doesn't make any requests when the user is not logged in", async () => {
 			// The constructor makes some requests.
 			// We have to mock them for this not to throw
-			fetch.resetMocks();
 			fetch.mockResponse('{}');
 
 			try {
@@ -251,7 +252,6 @@ describe('Auth', () => {
 		test('Returns if token is still valid', async () => {
 			// The constructor makes some requests.
 			// We have to mock them for this not to throw
-			fetch.resetMocks();
 			fetch.mockResponse('{"users": [{ "updated": true }]}');
 
 			const auth = new Auth({ apiKey: 'key' });
@@ -266,7 +266,6 @@ describe('Auth', () => {
 		test('Allow only one concurrent fetch request', async () => {
 			// The constructor makes some requests.
 			// We have to mock them for this not to throw
-			fetch.resetMocks();
 			fetch.mockResponse('{"users": [{ "updated": true }]}');
 
 			const auth = new Auth({ apiKey: 'key' });
@@ -275,7 +274,7 @@ describe('Auth', () => {
 				tokenManager: {
 					idToken: 'idTokenString',
 					// Mock old expiration time
-					expiresAt: Date.now() + 3600 * 1000
+					expiresAt: Date.now() - 3600 * 1000
 				}
 			};
 
@@ -290,7 +289,6 @@ describe('Auth', () => {
 		test('Sets correct expiration time', async () => {
 			// The constructor makes some requests.
 			// We have to mock them for this not to throw
-			fetch.resetMocks();
 			fetch.mockResponse('{"users": [{ "updated": true }]}');
 
 			const auth = new Auth({ apiKey: 'key' });
@@ -314,13 +312,13 @@ describe('Auth', () => {
 			expect(difference < 5).toEqual(true);
 		});
 
-		test('Updates the user data', async () => {
+		test('Updates id and refresh tokens', async () => {
 			// The constructor makes some requests.
 			// We have to mock them for this not to throw
-			fetch.resetMocks();
-			fetch.mockResponse('{"users": [{ "updated": true }]}');
+			fetch.mockResponse('{"refresh_token": "updated", "id_token": "updated"}');
 
 			const auth = new Auth({ apiKey: 'key' });
+
 			// Mock logged in user.
 			auth.user = {
 				tokenManager: {
@@ -334,7 +332,39 @@ describe('Auth', () => {
 
 			// Check that the time is close enough by allowing
 			// a few milliseconds of delay, since the function takes time to run.
-			expect(auth.user.updated).toEqual(true);
+			expect(auth.user.tokenManager.refreshToken).toEqual('updated');
+			expect(auth.user.tokenManager.idToken).toEqual('updated');
+		});
+	});
+
+	describe('AuthorizedRequest()', () => {
+		test('Adds Authorization headers when the user is logged in.', async () => {
+			// The constructor makes some requests.
+			// We have to mock them for this not to throw
+			fetch.mockResponse('{}');
+
+			const auth = new Auth({ apiKey: 'key' });
+			// Mock logged in user.
+			auth.user = mockUserData;
+
+			await auth.authorizedRequest('http://google.com');
+
+			const headers = fetch.mock.calls[0][0].headers;
+
+			expect(headers.get('Authorization')).toEqual('Bearer idTokenString');
+		});
+
+		test("Doesn't change the request when the user is not logged in", async () => {
+			// The constructor makes some requests.
+			// We have to mock them for this not to throw
+			fetch.mockResponse('{}');
+
+			const auth = new Auth({ apiKey: 'key' });
+
+			const request = new Request('http://google.com');
+			await auth.authorizedRequest(request);
+
+			expect(fetch.mock.calls[0][0]).toBe(request);
 		});
 	});
 });
