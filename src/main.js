@@ -105,7 +105,7 @@ export default class Auth {
 			method: 'POST',
 			body: typeof body === 'string' ? body : JSON.stringify(body)
 		}).then(async response => {
-			const data = await response.json();
+			let data = await response.json();
 
 			// If the response has an error, check to see if we have a human readable version of it,
 			// and throw that instead.
@@ -113,6 +113,9 @@ export default class Auth {
 				throw Error(humanReadableErrors[data.error.message] || data.error.message);
 			}
 
+			// Add a hidden date property to the returned object.
+			// Used mostly to calculate the expiration date for tokens.
+			Object.defineProperty(data, 'expiresAt', { value: new Date(response.headers.get('date')) + 3600 * 100 });
 			return data;
 		});
 	}
@@ -164,9 +167,6 @@ export default class Auth {
 		}
 
 		try {
-			// Calculated expiration time for the new token.
-			const expiresAt = Date.now() + 3600 * 1000;
-
 			// Save the promise so that if this function is called
 			// anywhere else we don't make more than one request.
 			this.refreshRequest = this.api('token', {
@@ -174,7 +174,7 @@ export default class Auth {
 				refresh_token: this.user.tokenManager.refreshToken
 			});
 
-			const { id_token: idToken, refresh_token: refreshToken } = await this.refreshRequest;
+			const { id_token: idToken, refresh_token: refreshToken, expiresAt } = await this.refreshRequest;
 
 			await this.persistSession({
 				...this.user,
@@ -207,10 +207,11 @@ export default class Auth {
 	 * @param {string} token The custom token.
 	 */
 	async signInWithCustomToken(token) {
-		// Calculate the expiration date for the idToken.
-		const expiresAt = Date.now() + 3600 * 1000;
 		// Try to exchange the Auth Code for an idToken and refreshToken.
-		const { idToken, refreshToken } = await this.api('signInWithCustomToken', { token, returnSecureToken: true });
+		const { idToken, refreshToken, expiresAt } = await this.api('signInWithCustomToken', {
+			token,
+			returnSecureToken: true
+		});
 
 		// Now get the user profile.
 		await this.fetchProfile({ idToken, refreshToken, expiresAt });
@@ -274,10 +275,8 @@ export default class Auth {
 		if (linkAccount && !this.user) throw Error('Request to "Link account" was made, but user is no longer signed-in');
 		await this.storage.remove(`Auth:LinkAccount:${this.apiKey}:${this.name}`);
 
-		// Calculate the expiration date for the idToken.
-		const expiresAt = Date.now() + 3600 * 1000;
 		// Try to exchange the Auth Code for an idToken and refreshToken.
-		const { idToken, refreshToken, context } = await this.api('signInWithIdp', {
+		const { idToken, refreshToken, expiresAt, context } = await this.api('signInWithIdp', {
 			// If this is a "link account" flow, then attach the idToken of the currently logged in account.
 			idToken: linkAccount ? this.user.tokenManager.idToken : undefined,
 			requestUri,
@@ -322,9 +321,7 @@ export default class Auth {
 	 * @param {string} [password] The password for the user to create.
 	 */
 	async signUp(email, password) {
-		// Calculate the expiration date for the idToken.
-		const expiresAt = Date.now() + 3600 * 1000;
-		const { idToken, refreshToken } = await this.api('signUp', {
+		const { idToken, refreshToken, expiresAt } = await this.api('signUp', {
 			email,
 			password,
 			returnSecureToken: true
@@ -340,9 +337,7 @@ export default class Auth {
 	 * @param {string} password
 	 */
 	async signIn(email, password) {
-		// Calculate the expiration date for the idToken.
-		const expiresAt = Date.now() + 3600 * 1000;
-		const { idToken, refreshToken } = await this.api('signInWithPassword', {
+		const { idToken, refreshToken, expiresAt } = await this.api('signInWithPassword', {
 			email,
 			password,
 			returnSecureToken: true
@@ -418,19 +413,16 @@ export default class Auth {
 		await this.enforceAuth();
 
 		// Calculate the expiration date for the idToken.
-		const expiresAt = Date.now() + 3600 * 1000;
 		const updatedData = await this.api('update', {
 			...newData,
 			idToken: this.user.tokenManager.idToken,
 			returnSecureToken: true
 		});
 
+		const { idToken, refreshToken, expiresAt } = updatedData;
+
 		if (updatedData.idToken) {
-			updatedData.tokenManager = {
-				idToken: updatedData.idToken,
-				refreshToken: updatedData.refreshToken,
-				expiresAt
-			};
+			updatedData.tokenManager = { idToken, refreshToken, expiresAt };
 		} else {
 			updatedData.tokenManager = this.user.tokenManager;
 		}

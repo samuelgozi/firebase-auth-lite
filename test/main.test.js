@@ -287,9 +287,13 @@ describe('Auth', () => {
 		});
 
 		test('Sets correct expiration time', async () => {
-			// The constructor makes some requests.
-			// We have to mock them for this not to throw
-			fetch.mockResponse('{"users": [{ "updated": true }]}');
+			const responseDate = new Date();
+
+			fetch.mockResponse('{"users": [{ "updated": true }]}', {
+				headers: {
+					date: responseDate.toUTCString()
+				}
+			});
 
 			const auth = new Auth({ apiKey: 'key' });
 			// Mock logged in user.
@@ -301,15 +305,12 @@ describe('Auth', () => {
 				}
 			};
 
-			const expectedExpiration = Date.now() + 3600 * 1000;
+			const expectedExpiration = new Date(responseDate + 3600 * 1000);
 			await auth.refreshIdToken();
-
-			// Get the time difference in milliseconds.
-			const difference = Math.abs(expectedExpiration - auth.user.tokenManager.expiresAt);
 
 			// Check that the time is close enough by allowing
 			// a few milliseconds of delay, since the function takes time to run.
-			expect(difference < 5).toEqual(true);
+			expect(new Date(auth.user.tokenManager.expiresAt)).toEqual(expectedExpiration);
 		});
 
 		test('Updates id and refresh tokens', async () => {
@@ -365,6 +366,83 @@ describe('Auth', () => {
 			await auth.authorizedRequest(request);
 
 			expect(fetch.mock.calls[0][0]).toBe(request);
+		});
+	});
+
+	describe('signInWithCustomToken', () => {
+		test('Makes the right request', async () => {
+			const auth = new Auth({ apiKey: 'key' });
+
+			fetch.mockResponses('{ "idToken": "123", "refreshToken": "456" }', '{"users": [{ "updated": true }]}');
+
+			await auth.signInWithCustomToken('token123');
+			const requestBody = JSON.parse(fetch.mock.calls[0][1].body);
+
+			expect(requestBody).toEqual({
+				token: 'token123',
+				returnSecureToken: true
+			});
+		});
+
+		test('Updates the userData', async () => {
+			const auth = new Auth({ apiKey: 'key' });
+
+			fetch.mockResponses('{ "idToken": "123", "refreshToken": "456" }', '{"users": [{ "updated": true }]}');
+			await auth.signInWithCustomToken('token123');
+
+			expect(auth.user.updated).toEqual(true);
+		});
+	});
+
+	describe('signUp', () => {
+		test('Makes the right request', async () => {
+			const auth = new Auth({ apiKey: 'key' });
+
+			fetch.mockResponses('{ "idToken": "123", "refreshToken": "456" }', '{"users": [{ "updated": true }]}');
+
+			await auth.signUp('email', 'password');
+			const requestBody = JSON.parse(fetch.mock.calls[0][1].body);
+
+			expect(requestBody).toEqual({
+				email: 'email',
+				password: 'password',
+				returnSecureToken: true
+			});
+		});
+
+		test('Updates the userData', async () => {
+			const auth = new Auth({ apiKey: 'key' });
+
+			fetch.mockResponses('{ "idToken": "123", "refreshToken": "456" }', '{"users": [{ "updated": true }]}');
+			await auth.signUp('email', 'password');
+
+			expect(auth.user.updated).toEqual(true);
+		});
+	});
+
+	describe('signIn', () => {
+		test('Makes the right request', async () => {
+			const auth = new Auth({ apiKey: 'key' });
+
+			fetch.mockResponses('{ "idToken": "123", "refreshToken": "456" }', '{"users": [{ "updated": true }]}');
+
+			await auth.signIn('email', 'password');
+			const requestBody = JSON.parse(fetch.mock.calls[0][1].body);
+
+			expect(requestBody).toEqual({
+				email: 'email',
+				password: 'password',
+				returnSecureToken: true
+			});
+		});
+
+		test('Updates the userData', async () => {
+			const auth = new Auth({ apiKey: 'key' });
+
+			fetch.mockResponses('{ "idToken": "123", "refreshToken": "456" }', '{"users": [{ "updated": true }]}');
+			await auth.signIn('email', 'password');
+
+			expect(auth.user.updated).toEqual(true);
 		});
 	});
 });
