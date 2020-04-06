@@ -352,12 +352,15 @@ export default class Auth {
 	 * Can be used to reset a password, to verify an email address and send a Sign-in email link.
 	 * The `email` argument is not needed only when verifying an email(In that case it will be completely ignored, even if specified), otherwise it is required.
 	 * @param {'PASSWORD_RESET'|'VERIFY_EMAIL'|'EMAIL_SIGNIN'} requestType The type of out-of-band (OOB) code to send.
-	 * @param {string} [email] When the `requestType` is `PASSWORD_RESET` you need to provide an email address, else it will be ignored.
+	 * @param {string} [email] When the `requestType` is `PASSWORD_RESET` or `EMAIL_SIGNIN` you need to provide an email address.
 	 * @returns {Promise}
 	 */
 	async sendOobCode(requestType, email) {
 		const verifyEmail = requestType === 'VERIFY_EMAIL';
-		if (verifyEmail) await this.enforceAuth();
+		if (verifyEmail) {
+			await this.enforceAuth();
+			email = this.user.email;
+		}
 
 		return void this.api('sendOobCode', {
 			idToken: verifyEmail ? this.user.tokenManager.idToken : undefined,

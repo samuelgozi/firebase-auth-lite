@@ -1,6 +1,7 @@
 import Auth from '../src/main.js';
 
 const mockUserData = {
+	email: 'test@example.com',
 	tokenManager: {
 		idToken: 'idTokenString',
 		expiresAt: Date.now() + 3600 * 1000 // In one hour from now.
@@ -66,17 +67,17 @@ describe('Auth', () => {
 			test('Reads the username from storage when already logged in', async () => {
 				// The constructor makes some requests.
 				// We have to mock them for this not to throw
-				fetch.mockResponse('{"users": [{}]}');
+				fetch.mockResponse(`{ "users": [${JSON.stringify(mockUserData)}] }`);
 
 				localStorage.setItem('Auth:User:key:default', JSON.stringify(mockUserData));
 				const auth = new Auth({ apiKey: 'key' });
 
-				await new Promise(resolve => {
+				const userData = await new Promise(resolve => {
 					auth.listen(resolve);
 				});
 
+				expect(userData).toEqual(mockUserData);
 				expect(auth.user).toEqual(mockUserData);
-				localStorage.removeItem('Auth:User:key:default');
 			});
 
 			test('Updates the stored data if the user is logged in', async () => {
@@ -94,7 +95,6 @@ describe('Auth', () => {
 
 				expect(auth.user.username).toEqual('updated!');
 				expect(userData).toEqual(auth.user);
-				localStorage.removeItem('Auth:User:key:default');
 			});
 		});
 
@@ -185,7 +185,6 @@ describe('Auth', () => {
 			expect(await auth.storage.get('Auth:User:key:default')).toEqual(JSON.stringify({ test: 'working' }));
 
 			// Cleanup
-			localStorage.removeItem('Auth:User:key:default');
 		});
 
 		test('Updates the "user" property with the new data', async () => {
@@ -195,7 +194,6 @@ describe('Auth', () => {
 			expect(auth.user).toEqual({ test: 'working' });
 
 			// Cleanup
-			localStorage.removeItem('Auth:User:key:default');
 		});
 
 		test('Fires an event', async () => {
@@ -209,7 +207,6 @@ describe('Auth', () => {
 			expect(callback).toHaveBeenCalledTimes(1);
 
 			// Cleanup
-			localStorage.removeItem('Auth:User:key:default');
 		});
 	});
 
@@ -443,6 +440,107 @@ describe('Auth', () => {
 			await auth.signIn('email', 'password');
 
 			expect(auth.user.updated).toEqual(true);
+		});
+	});
+
+	describe('senbOobCode', () => {
+		test('Throws when request type is "verify email" but not logged in', async () => {
+			const auth = new Auth({ apiKey: 'key' });
+			await expect(auth.sendOobCode('VERIFY_EMAIL')).rejects.toThrow();
+		});
+
+		test('Sends correct request to "verify email"', async () => {
+			const auth = new Auth({ apiKey: 'key' });
+			auth.user = mockUserData;
+
+			fetch.mockResponse('{}');
+			await auth.sendOobCode('VERIFY_EMAIL');
+
+			expect(fetch.mock.calls[0][1].body).toEqual(
+				JSON.stringify({
+					idToken: 'idTokenString',
+					requestType: 'VERIFY_EMAIL',
+					email: 'test@example.com',
+					continueUrl: auth.redirectUri + '?email=test@example.com'
+				})
+			);
+		});
+
+		test('Ignores the email field when making "verify email" request', async () => {
+			const auth = new Auth({ apiKey: 'key' });
+			auth.user = mockUserData;
+			fetch.mockResponse('{}');
+			await auth.sendOobCode('VERIFY_EMAIL', 'myemail@email.com');
+			expect(fetch.mock.calls[0][1].body).toEqual(
+				JSON.stringify({
+					idToken: 'idTokenString',
+					requestType: 'VERIFY_EMAIL',
+					email: 'test@example.com',
+					continueUrl: auth.redirectUri + '?email=test@example.com'
+				})
+			);
+		});
+
+		test('Sends correct request to the other options', async () => {
+			const auth = new Auth({ apiKey: 'key' });
+			auth.user = mockUserData;
+
+			fetch.mockResponses('{}', '{}');
+			await auth.sendOobCode('PASSWORD_RESET', 'myemail@email.com');
+			await auth.sendOobCode('EMAIL_SIGNIN', 'myemail@email.com');
+
+			expect(fetch.mock.calls[0][1].body).toEqual(
+				JSON.stringify({
+					requestType: 'PASSWORD_RESET',
+					email: 'myemail@email.com',
+					continueUrl: auth.redirectUri + '?email=myemail@email.com'
+				})
+			);
+
+			expect(fetch.mock.calls[1][1].body).toEqual(
+				JSON.stringify({
+					requestType: 'EMAIL_SIGNIN',
+					email: 'myemail@email.com',
+					continueUrl: auth.redirectUri + '?email=myemail@email.com'
+				})
+			);
+		});
+	});
+
+	describe('resetPassword', () => {
+		test('Sends the correct request', async () => {
+			const auth = new Auth({ apiKey: 'key' });
+			auth.user = mockUserData;
+
+			fetch.mockResponse('{}');
+			await auth.resetPassword('code', 'password');
+
+			expect(fetch.mock.calls[0][1].body).toEqual(
+				JSON.stringify({
+					oobCode: 'code',
+					newPassword: 'password'
+				})
+			);
+		});
+
+		test('Only sends oobCode when password is missing', async () => {
+			const auth = new Auth({ apiKey: 'key' });
+			auth.user = mockUserData;
+
+			fetch.mockResponse('{}');
+			await auth.resetPassword('code');
+
+			expect(fetch.mock.calls[0][1].body).toEqual('{"oobCode":"code"}');
+		});
+
+		test('Returns the email of the account', async () => {
+			const auth = new Auth({ apiKey: 'key' });
+			auth.user = mockUserData;
+
+			fetch.mockResponse('{ "email": "test@mail.com" }');
+			const response = await auth.resetPassword('code', 'password');
+
+			expect(response).toEqual('test@mail.com');
 		});
 	});
 });
