@@ -543,4 +543,85 @@ describe('Auth', () => {
 			expect(response).toEqual('test@mail.com');
 		});
 	});
+
+	describe('fetchProvidersForEmail', () => {
+		test('Sends correct request', async () => {
+			const auth = new Auth({ apiKey: 'key' });
+
+			fetch.mockResponse('{}');
+
+			await auth.fetchProvidersForEmail('test@email.com');
+
+			expect(fetch.mock.calls[0][1].body).toEqual(`{"identifier":"test@email.com","continueUri":"${location.href}"}`);
+		});
+
+		test('Returns the response without the kind prop', async () => {
+			const auth = new Auth({ apiKey: 'key' });
+
+			fetch.mockResponse(`{
+				"kind": "identitytoolkit#CreateAuthUriResponse",
+				"allProviders": [
+					"google.com",
+					"password"
+				],
+				"registered": true,
+				"sessionId": "8bbWb2tzjwN-OglfImGs9BXzBJ8",
+				"signinMethods": [
+					"google.com",
+					"password"
+				]
+			}`);
+
+			const expected = {
+				allProviders: ['google.com', 'password'],
+				registered: true,
+				sessionId: '8bbWb2tzjwN-OglfImGs9BXzBJ8',
+				signinMethods: ['google.com', 'password']
+			};
+
+			const response = await auth.fetchProvidersForEmail('test@email.com');
+
+			expect(response).toEqual(expected);
+		});
+	});
+
+	describe('fetchProfile', () => {
+		test('Throws when the user is not logged in', async () => {
+			const auth = new Auth({ apiKey: 'key' });
+			await expect(auth.fetchProfile()).rejects.toThrow('The user must be logged-in to use this method.');
+		});
+
+		test('Makes correct request', async () => {
+			const auth = new Auth({ apiKey: 'key' });
+			auth.user = mockUserData;
+
+			fetch.mockResponse(`{ "users": [${JSON.stringify(mockUserData)}] }`);
+
+			await auth.fetchProfile();
+
+			expect(fetch.mock.calls[0][1].body).toEqual('{"idToken":"idTokenString"}');
+		});
+
+		test('Persists the user data to storage', async () => {
+			const auth = new Auth({ apiKey: 'key' });
+			auth.user = mockUserData;
+
+			fetch.mockResponse(`{ "users": [${JSON.stringify(mockUserData)}] }`);
+
+			await auth.fetchProfile();
+			const storedData = JSON.parse(localStorage.getItem('Auth:User:key:default'));
+
+			expect(storedData).toEqual(mockUserData);
+		});
+
+		test('Uses the tokenManager argument when its passed', async () => {
+			const auth = new Auth({ apiKey: 'key' });
+
+			fetch.mockResponse(`{ "users": [${JSON.stringify(mockUserData)}] }`);
+
+			await auth.fetchProfile({ idToken: 'providedIdToken' });
+
+			expect(fetch.mock.calls[0][1].body).toEqual('{"idToken":"providedIdToken"}');
+		});
+	});
 });
