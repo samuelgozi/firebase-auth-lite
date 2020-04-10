@@ -1,5 +1,12 @@
 import Auth from '../src/main.js';
 
+let assignMock = jest.fn(href => {
+	window.location.href = href;
+});
+
+delete window.location;
+window.location = { assign: assignMock, href: 'currentUri' };
+
 const mockUserData = {
 	email: 'test@example.com',
 	tokenManager: {
@@ -10,7 +17,10 @@ const mockUserData = {
 
 afterEach(() => {
 	fetch.resetMocks();
+	assignMock.mockClear();
+	window.location.href = 'currentUri';
 	localStorage.removeItem('Auth:User:key:default');
+	localStorage.removeItem('Auth:LinkAccount:key:default');
 });
 
 describe('localStorageAdapter()', () => {
@@ -388,6 +398,75 @@ describe('Auth', () => {
 			await auth.signInWithCustomToken('token123');
 
 			expect(auth.user.updated).toEqual(true);
+		});
+	});
+
+	describe('signInWithProvider', () => {
+		test("Throws if a redirect URI wasn't provided on instantiation", async () => {
+			const auth = new Auth({ apiKey: 'key' });
+
+			await expect(auth.signInWithProvider()).rejects.toThrow(
+				'In order to use an Identity provider you should initiate the "Auth" instance with a "redirectUri".'
+			);
+		});
+
+		test('Throws if sign in with an unconfigured provider was made', async () => {
+			const auth = new Auth({ apiKey: 'key', redirectUri: 'redirectHere' });
+
+			await expect(auth.signInWithProvider({ provider: 'google' })).rejects.toThrow(
+				'You haven\'t configured "google" with this "Auth" instance.'
+			);
+		});
+
+		test('Enforces signed-in user when performing a "linkAccount"', async () => {
+			const auth = new Auth({ apiKey: 'key', redirectUri: 'redirectHere' });
+
+			await expect(auth.signInWithProvider({ provider: 'google.com', linkAccount: true })).rejects.toThrow(
+				'The user must be logged-in to use this method.'
+			);
+		});
+
+		test('Makes correct requests', async () => {
+			const auth = new Auth({ apiKey: 'key', redirectUri: 'redirectHere', providers: ['google.com'] });
+
+			fetch.mockResponse(
+				`{
+					"kind": "identitytoolkit#CreateAuthUriResponse",
+					"authUri": "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=831650550875-vuv36e1i0shmu456i1l08rg3vgjhnlhg.apps.googleusercontent.com&redirect_uri=redirectUri&state=state&scope=openid+https://www.googleapis.com/auth/userinfo.email",
+					"providerId": "google.com",
+					"sessionId": "LwtaMnW9snPfIfm9R1rPTosVpY4"
+				}`
+			);
+
+			await auth.signInWithProvider('google.com');
+			const body = fetch.mock.calls[0][1].body;
+
+			expect(body).toEqual(
+				JSON.stringify({
+					providerId: 'google.com',
+					continueUri: 'redirectHere',
+					authFlowType: 'CODE_FLOW'
+				})
+			);
+		});
+
+		test('Redirects to the received authUri', async () => {
+			const auth = new Auth({ apiKey: 'key', redirectUri: 'redirectHere', providers: ['google.com'] });
+
+			fetch.mockResponse(
+				`{
+					"kind": "identitytoolkit#CreateAuthUriResponse",
+					"authUri": "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=831650550875-vuv36e1i0shmu456i1l08rg3vgjhnlhg.apps.googleusercontent.com&redirect_uri=redirectUri&state=state&scope=openid+https://www.googleapis.com/auth/userinfo.email",
+					"providerId": "google.com",
+					"sessionId": "LwtaMnW9snPfIfm9R1rPTosVpY4"
+				}`
+			);
+
+			await auth.signInWithProvider('google.com');
+
+			expect(window.location.href).toEqual(
+				'https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=831650550875-vuv36e1i0shmu456i1l08rg3vgjhnlhg.apps.googleusercontent.com&redirect_uri=redirectUri&state=state&scope=openid+https://www.googleapis.com/auth/userinfo.email'
+			);
 		});
 	});
 

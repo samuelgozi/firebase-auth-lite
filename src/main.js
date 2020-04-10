@@ -226,11 +226,11 @@ export default class Auth {
 		if (!this.redirectUri)
 			throw Error('In order to use an Identity provider you should initiate the "Auth" instance with a "redirectUri".');
 
-		// Make sure the user is logged in when an "account link" was requested.
-		if (options.linkAccount) await this.enforceAuth();
-
 		// The options can be a string, or an object, so here we make sure we extract the right data in each case.
 		const { provider, context, linkAccount } = typeof options === 'string' ? { provider: options } : options;
+
+		// Make sure the user is logged in when an "account link" was requested.
+		if (linkAccount) await this.enforceAuth();
 
 		// Get an array of the allowed providers names.
 		const allowedProviders = Object.keys(this.providers);
@@ -256,7 +256,7 @@ export default class Auth {
 		linkAccount && (await this.storage.set(`Auth:LinkAccount:${this.apiKey}:${this.name}`, true));
 
 		// Finally - redirect the page to the auth endpoint.
-		location.href = authUri;
+		location.assign(authUri);
 	}
 
 	/**
