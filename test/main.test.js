@@ -294,11 +294,11 @@ describe('Auth', () => {
 		});
 
 		test('Sets correct expiration time', async () => {
-			const responseDate = new Date();
+			const responseDate = 'Fri, 10 Apr 2020 11:08:13 GMT';
 
 			fetch.mockResponse('{"users": [{ "updated": true }]}', {
 				headers: {
-					date: responseDate.toUTCString()
+					date: responseDate
 				}
 			});
 
@@ -312,12 +312,13 @@ describe('Auth', () => {
 				}
 			};
 
-			const expectedExpiration = new Date(responseDate + 3600 * 1000);
+			const expectedExpiration = Date.parse(responseDate) + 3600 * 1000;
 			await auth.refreshIdToken();
 
 			// Check that the time is close enough by allowing
 			// a few milliseconds of delay, since the function takes time to run.
-			expect(new Date(auth.user.tokenManager.expiresAt)).toEqual(expectedExpiration);
+			expect(auth.user.tokenManager.expiresAt).toEqual(expectedExpiration);
+			expect(typeof auth.user.tokenManager.expiresAt).toEqual('number');
 		});
 
 		test('Updates id and refresh tokens', async () => {
@@ -448,6 +449,24 @@ describe('Auth', () => {
 					authFlowType: 'CODE_FLOW'
 				})
 			);
+		});
+
+		test('Saves the correct data to storage', async () => {
+			const auth = new Auth({ apiKey: 'key', redirectUri: 'redirectHere', providers: ['google.com'] });
+
+			fetch.mockResponse(
+				`{
+					"kind": "identitytoolkit#CreateAuthUriResponse",
+					"authUri": "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=831650550875-vuv36e1i0shmu456i1l08rg3vgjhnlhg.apps.googleusercontent.com&redirect_uri=redirectUri&state=state&scope=openid+https://www.googleapis.com/auth/userinfo.email",
+					"providerId": "google.com",
+					"sessionId": "LwtaMnW9snPfIfm9R1rPTosVpY4"
+				}`
+			);
+
+			await auth.signInWithProvider('google.com');
+
+			expect(await auth.storage.get('Auth:SessionId:key:default')).toEqual('LwtaMnW9snPfIfm9R1rPTosVpY4');
+			expect(await auth.storage.get('Auth:LinkAccount:key:default')).toEqual(null);
 		});
 
 		test('Redirects to the received authUri', async () => {

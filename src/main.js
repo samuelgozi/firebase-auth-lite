@@ -115,7 +115,7 @@ export default class Auth {
 
 			// Add a hidden date property to the returned object.
 			// Used mostly to calculate the expiration date for tokens.
-			Object.defineProperty(data, 'expiresAt', { value: new Date(response.headers.get('date')) + 3600 * 100 });
+			Object.defineProperty(data, 'expiresAt', { value: Date.parse(response.headers.get('date')) + 3600 * 1000 });
 			return data;
 		});
 	}
