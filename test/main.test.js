@@ -213,6 +213,17 @@ describe('Auth', () => {
 		});
 	});
 
+	describe('sKey', () => {
+		test('returns correct key', () => {
+			const auth = new Auth({ apiKey: 'key' });
+
+			expect(auth.sKey('User')).toEqual('Auth:User:key:default');
+			expect(auth.sKey('LinkAccount')).toEqual('Auth:LinkAccount:key:default');
+			expect(auth.sKey('SessionId')).toEqual('Auth:SessionId:key:default');
+			expect(auth.sKey('Whatever...')).toEqual('Auth:Whatever...:key:default');
+		});
+	});
+
 	describe('enforceAuth()', () => {
 		test('Throws when the user is not logged in', async () => {
 			const auth = new Auth({ apiKey: 'key' });
@@ -424,7 +435,7 @@ describe('Auth', () => {
 		});
 	});
 
-	describe('signInWithCustomToken', () => {
+	describe('signInWithCustomToken()', () => {
 		test('Makes the right request', async () => {
 			const auth = new Auth({ apiKey: 'key' });
 
@@ -449,7 +460,7 @@ describe('Auth', () => {
 		});
 	});
 
-	describe('signInWithProvider', () => {
+	describe('signInWithProvider()', () => {
 		test("Throws if a redirect URI wasn't provided on instantiation", async () => {
 			const auth = new Auth({ apiKey: 'key' });
 
@@ -536,7 +547,7 @@ describe('Auth', () => {
 		});
 	});
 
-	describe('signUp', () => {
+	describe('signUp()', () => {
 		test('Makes the right request', async () => {
 			const auth = new Auth({ apiKey: 'key' });
 
@@ -562,7 +573,7 @@ describe('Auth', () => {
 		});
 	});
 
-	describe('signIn', () => {
+	describe('signIn()', () => {
 		test('Makes the right request', async () => {
 			const auth = new Auth({ apiKey: 'key' });
 
@@ -588,7 +599,7 @@ describe('Auth', () => {
 		});
 	});
 
-	describe('senbOobCode', () => {
+	describe('senbOobCode()', () => {
 		test('Throws when request type is "verify email" but not logged in', async () => {
 			const auth = new Auth({ apiKey: 'key' });
 			await expect(auth.sendOobCode('VERIFY_EMAIL')).rejects.toThrow();
@@ -652,7 +663,7 @@ describe('Auth', () => {
 		});
 	});
 
-	describe('resetPassword', () => {
+	describe('resetPassword()', () => {
 		test('Sends the correct request', async () => {
 			const auth = new Auth({ apiKey: 'key' });
 			auth.user = mockUserData;
@@ -689,7 +700,7 @@ describe('Auth', () => {
 		});
 	});
 
-	describe('fetchProvidersForEmail', () => {
+	describe('fetchProvidersForEmail()', () => {
 		test('Sends correct request', async () => {
 			const auth = new Auth({ apiKey: 'key' });
 
@@ -730,7 +741,7 @@ describe('Auth', () => {
 		});
 	});
 
-	describe('fetchProfile', () => {
+	describe('fetchProfile()', () => {
 		test('Throws when the user is not logged in', async () => {
 			const auth = new Auth({ apiKey: 'key' });
 			await expect(auth.fetchProfile()).rejects.toThrow('The user must be logged-in to use this method.');
