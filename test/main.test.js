@@ -123,6 +123,52 @@ describe('Auth', () => {
 
 			expect(fetch.mock.calls.length).toEqual(0);
 		});
+
+		describe('Storage events listener', () => {
+			test('updates the instance user data', () => {
+				const auth = new Auth({ apiKey: 'key' });
+				const mockEvent = new Event('storage');
+
+				mockEvent.key = auth.sKey('User');
+				mockEvent.newValue = '{"hello":"world!"}';
+
+				window.dispatchEvent(mockEvent);
+
+				expect(auth.user).toEqual({ hello: 'world!' });
+			});
+
+			test('Triggers change event', () => {
+				const auth = new Auth({ apiKey: 'key' });
+				const mockEvent = new Event('storage');
+				const listener = jest.fn(() => {});
+
+				auth.listen(listener);
+
+				mockEvent.key = auth.sKey('User');
+				mockEvent.newValue = '{"hello":"world!"}';
+
+				window.dispatchEvent(mockEvent);
+
+				expect(listener).toHaveBeenCalledTimes(1);
+				expect(listener).toHaveBeenCalledWith({ hello: 'world!' });
+			});
+
+			test('Nothing happens when an unrelated storage event is triggered', () => {
+				const auth = new Auth({ apiKey: 'key' });
+				const mockEvent = new Event('storage');
+				const listener = jest.fn(() => {});
+
+				auth.listen(listener);
+
+				mockEvent.key = 'somethingElse';
+				mockEvent.newValue = '{"hello":"world!"}';
+
+				window.dispatchEvent(mockEvent);
+
+				expect(listener).toHaveBeenCalledTimes(0);
+				expect(auth.user).toEqual(undefined);
+			});
+		});
 	});
 
 	describe('listen() & emit()', () => {
@@ -193,8 +239,13 @@ describe('Auth', () => {
 			await auth.persistSession({ test: 'working' });
 
 			expect(await auth.storage.get('Auth:User:key:default')).toEqual(JSON.stringify({ test: 'working' }));
+		});
 
-			// Cleanup
+		test("Doens't update storage when second argument is false", async () => {
+			const auth = new Auth({ apiKey: 'key' });
+			await auth.persistSession({ test: 'working' }, false);
+
+			expect(await auth.storage.get('Auth:User:key:default')).toEqual(null);
 		});
 
 		test('Updates the "user" property with the new data', async () => {
@@ -202,8 +253,6 @@ describe('Auth', () => {
 			await auth.persistSession({ test: 'working' });
 
 			expect(auth.user).toEqual({ test: 'working' });
-
-			// Cleanup
 		});
 
 		test('Fires an event', async () => {
@@ -215,8 +264,6 @@ describe('Auth', () => {
 			await auth.persistSession();
 
 			expect(callback).toHaveBeenCalledTimes(1);
-
-			// Cleanup
 		});
 	});
 

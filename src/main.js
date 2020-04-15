@@ -59,12 +59,20 @@ export default class Auth {
 			this.providers[name] = scope;
 		}
 
-		this.storage.get(`Auth:User:${apiKey}:${name}`).then(user => {
+		this.storage.get(this.sKey('User')).then(user => {
 			if (user) {
 				this.user = JSON.parse(user);
 				this.fetchProfile();
 			}
 		});
+
+		// Because this library is used in react native, outside the browser as well,
+		// we need to first check if this environment support `addEventListener` on the window.
+		'addEventListener' in window &&
+			window.addEventListener('storage', e => {
+				if (e.key !== this.sKey('User')) return;
+				this.persistSession(JSON.parse(e.newValue), false);
+			});
 	}
 
 	/**
@@ -87,6 +95,14 @@ export default class Auth {
 
 		// Return a function to unbind the callback.
 		return () => (this.listeners = this.listeners.filter(fn => fn !== cb));
+	}
+
+	/**
+	 * Generates a unique storage key for this app.
+	 * @private
+	 */
+	sKey(key) {
+		return `Auth:${key}:${this.apiKey}:${this.name}`;
 	}
 
 	/**
@@ -131,13 +147,13 @@ export default class Auth {
 	}
 
 	/**
-	 * Saves the user data in the local storage.
-	 * @param {Object} credentials
+	 * Updates the user data in the localStorage.
+	 * @param {Object} userData the new user data.
+	 * @param {boolean} [updateStorage = true] Whether to update local storage or not.
 	 * @private
 	 */
-	async persistSession(userData) {
-		// Persist the session to the local storage.
-		await this.storage.set(`Auth:User:${this.apiKey}:${this.name}`, JSON.stringify(userData));
+	async persistSession(userData, updateStorage = true) {
+		if (updateStorage) await this.storage[userData ? 'set' : 'remove'](this.sKey('User'), JSON.stringify(userData));
 		this.user = userData;
 		this.emit();
 	}
@@ -146,10 +162,8 @@ export default class Auth {
 	 * Sign out the currently signed in user.
 	 * Removes all data stored in the storage that's associated with the user.
 	 */
-	async signOut() {
-		await this.storage.remove(`Auth:User:${this.apiKey}:${this.name}`);
-		this.user = null;
-		this.emit();
+	signOut() {
+		return this.persistSession(null);
 	}
 
 	/**
@@ -251,9 +265,9 @@ export default class Auth {
 		// Save the sessionId that we just received in the local storage.
 		// Is required to finish the auth flow, I believe this is used to mitigate CSRF attacks.
 		// (No docs on this...)
-		await this.storage.set(`Auth:SessionId:${this.apiKey}:${this.name}`, sessionId);
+		await this.storage.set(this.sKey('SessionId'), sessionId);
 		// Save if this is a fresh log-in or a "link account" request.
-		linkAccount && (await this.storage.set(`Auth:LinkAccount:${this.apiKey}:${this.name}`, true));
+		linkAccount && (await this.storage.set(this.sKey('LinkAccount'), true));
 
 		// Finally - redirect the page to the auth endpoint.
 		location.assign(authUri);
@@ -267,13 +281,13 @@ export default class Auth {
 	 */
 	async finishProviderSignIn(requestUri = location.href) {
 		// Get the sessionId we received before the redirect from storage.
-		const sessionId = await this.storage.get(`Auth:SessionId:${this.apiKey}:${this.name}`);
+		const sessionId = await this.storage.get(this.sKey('SessionId'));
 		// Get the indication if this was a "link account" request.
-		const linkAccount = await this.storage.get(`Auth:LinkAccount:${this.apiKey}:${this.name}`);
+		const linkAccount = await this.storage.get(this.sKey('LinkAccount'));
 		// Check for the edge case in which the user signed out before completing the linkAccount
 		// Request.
 		if (linkAccount && !this.user) throw Error('Request to "Link account" was made, but user is no longer signed-in');
-		await this.storage.remove(`Auth:LinkAccount:${this.apiKey}:${this.name}`);
+		await this.storage.remove(this.sKey('LinkAccount'));
 
 		// Try to exchange the Auth Code for an idToken and refreshToken.
 		const { idToken, refreshToken, expiresAt, context } = await this.api('signInWithIdp', {
