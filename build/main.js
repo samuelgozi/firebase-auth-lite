@@ -125,7 +125,9 @@ export default class Auth {
             // If the response has an error, check to see if we have a human readable version of it,
             // and throw that instead.
             if (!response.ok) {
-                throw Error(humanReadableErrors[data.error.message] || data.error.message);
+                const error = Error(humanReadableErrors[data.error.message] || data.error.message);
+                error.code = data.error.message;
+                throw error;
             }
             return data;
         });
