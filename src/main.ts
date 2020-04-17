@@ -3,7 +3,6 @@
  * https://cloud.google.com/identity-platform/docs/reference/rest/v1/accounts
  */
 import { UserInfo as FBUser } from '@firebase/auth-types';
-import humanReadableErrors from './errors.json';
 
 type User = FBUser & { tokenManager: { idToken: string, refreshToken: string, expiresAt: number } };
 
@@ -180,7 +179,7 @@ export default class Auth {
 			// If the response has an error, check to see if we have a human readable version of it,
 			// and throw that instead.
 			if (!response.ok) {
-				throw Error(humanReadableErrors[data.error.message as keyof typeof humanReadableErrors] || data.error.message);
+				throw Error(data.error.message.split(' ')[0]);
 			}
 
 			return data;

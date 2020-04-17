@@ -1,4 +1,3 @@
-import humanReadableErrors from './errors.json';
 const localStorageAdapter = {
     getItem: async (key) => {
         return await localStorage.getItem(key);
@@ -125,9 +124,7 @@ export default class Auth {
             // If the response has an error, check to see if we have a human readable version of it,
             // and throw that instead.
             if (!response.ok) {
-                const error = Error(humanReadableErrors[data.error.message] || data.error.message);
-                error.code = data.error.message;
-                throw error;
+                throw Error(data.error.message.split(' ')[0]);
             }
             return data;
         });
