@@ -60,16 +60,16 @@ export default class Auth {
 		}
 
 		this.storage.get(this.sKey('User')).then(user => {
-			if (user) {
-				this.user = JSON.parse(user);
-				this.fetchProfile();
-			}
+			this.user = JSON.parse(user);
+			return user ? this.fetchProfile() : this.emit();
 		});
 
 		// Because this library is used in react native, outside the browser as well,
-		// we need to first check if this environment support `addEventListener` on the window.
+		// we need to first check if this environment supports `addEventListener` on the window.
 		'addEventListener' in window &&
 			window.addEventListener('storage', e => {
+				// This code will run if localStorage for this user
+				// data was updated from a different browser window.
 				if (e.key !== this.sKey('User')) return;
 				this.persistSession(JSON.parse(e.newValue), false);
 			});

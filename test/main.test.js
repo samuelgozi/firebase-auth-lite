@@ -108,6 +108,17 @@ describe('Auth', () => {
 			});
 		});
 
+		test('Calls the listeners when the user is not logged in', async () => {
+			const auth = new Auth({ apiKey: 'key' });
+
+			const userData = await new Promise(resolve => {
+				auth.listen(resolve);
+			});
+
+			expect(userData).toEqual(null);
+			expect(auth.user).toEqual(null);
+		});
+
 		test("Doesn't make any requests when the user is not logged in", async () => {
 			// The constructor makes some requests.
 			// We have to mock them for this not to throw
@@ -274,7 +285,9 @@ describe('Auth', () => {
 
 			await auth.persistSession();
 
-			expect(callback).toHaveBeenCalledTimes(1);
+			// One time in instantiation, and one
+			// time for the called method.
+			expect(callback).toHaveBeenCalledTimes(2);
 		});
 	});
 
@@ -309,7 +322,9 @@ describe('Auth', () => {
 
 			await auth.signOut();
 
-			expect(callback).toHaveBeenCalledTimes(1);
+			// One time in instantiation, and one
+			// time for the called method.
+			expect(callback).toHaveBeenCalledTimes(2);
 		});
 	});
 
@@ -411,6 +426,12 @@ describe('Auth', () => {
 			fetch.mockResponse('{}');
 
 			const auth = new Auth({ apiKey: 'key' });
+
+			// Wait for the initialization.
+			await new Promise(resolve => {
+				auth.listen(resolve);
+			});
+
 			// Mock logged in user.
 			auth.user = mockUserData;
 
@@ -607,6 +628,13 @@ describe('Auth', () => {
 
 		test('Sends correct request to "verify email"', async () => {
 			const auth = new Auth({ apiKey: 'key' });
+
+			// Wait for the initialization.
+			await new Promise(resolve => {
+				auth.listen(resolve);
+			});
+
+			// Mock logged user.
 			auth.user = mockUserData;
 
 			fetch.mockResponse('{}');
@@ -624,9 +652,18 @@ describe('Auth', () => {
 
 		test('Ignores the email field when making "verify email" request', async () => {
 			const auth = new Auth({ apiKey: 'key' });
+
+			// Wait for the initialization.
+			await new Promise(resolve => {
+				auth.listen(resolve);
+			});
+
+			// Mock logged user.
 			auth.user = mockUserData;
+
 			fetch.mockResponse('{}');
 			await auth.sendOobCode('VERIFY_EMAIL', 'myemail@email.com');
+
 			expect(fetch.mock.calls[0][1].body).toEqual(
 				JSON.stringify({
 					idToken: 'idTokenString',
