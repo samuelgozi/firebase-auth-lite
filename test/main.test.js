@@ -15,7 +15,16 @@ const mockUserData = {
 	}
 };
 
-afterEach(() => {
+async function mockLoggedIn(auth) {
+	// Await initialization.
+	await new Promise(resolve => {
+		auth.listen(resolve);
+	});
+
+	auth.user = mockUserData;
+}
+
+beforeEach(() => {
 	fetch.resetMocks();
 	assignMock.mockClear();
 	window.location.href = 'currentUri';
@@ -105,6 +114,34 @@ describe('Auth', () => {
 
 				expect(auth.user.username).toEqual('updated!');
 				expect(userData).toEqual(auth.user);
+			});
+
+			test('Refreshed the token when logged in and token has expired', async () => {
+				fetch.mockResponses('{ "id_token": "123", "refresh_token": "456" }', '{"users": [{ "updated": true }]}');
+
+				localStorage.setItem(
+					'Auth:User:key:default',
+					JSON.stringify({
+						email: 'test@example.com',
+						tokenManager: {
+							idToken: 'idTokenString',
+							expiresAt: Date.now() - 3600 * 1000 // one hour ago.
+						}
+					})
+				);
+
+				const auth = new Auth({ apiKey: 'key' });
+
+				// Await for the first update to happen.
+				await new Promise(resolve => {
+					auth.listen(resolve);
+				});
+
+				expect(fetch.mock.calls[0][0]).toEqual('https://securetoken.googleapis.com/v1/token?key=key');
+				expect(fetch.mock.calls[1][0]).toEqual('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=key');
+				expect(fetch.mock.calls.length).toEqual(2);
+				expect(auth.user.tokenManager.idToken).toEqual('123');
+				expect(auth.user.tokenManager.refreshToken).toEqual('456');
 			});
 		});
 
@@ -330,14 +367,8 @@ describe('Auth', () => {
 
 	describe('refreshIdToken()', () => {
 		test('Returns if token is still valid', async () => {
-			// The constructor makes some requests.
-			// We have to mock them for this not to throw
-			fetch.mockResponse('{"users": [{ "updated": true }]}');
-
 			const auth = new Auth({ apiKey: 'key' });
-			// Mock logged in user.
-			auth.user = mockUserData;
-
+			await mockLoggedIn(auth);
 			await auth.refreshIdToken();
 
 			expect(fetch.mock.calls.length).toEqual(0);
@@ -417,6 +448,32 @@ describe('Auth', () => {
 			expect(auth.user.tokenManager.refreshToken).toEqual('updated');
 			expect(auth.user.tokenManager.idToken).toEqual('updated');
 		});
+
+		test("Doesn't update local storage or emits when persist is set to false", async () => {
+			// The constructor makes some requests.
+			// We have to mock them for this not to throw
+			fetch.mockResponse('{"refresh_token": "updated", "id_token": "updated"}');
+
+			const auth = new Auth({ apiKey: 'key' });
+			await mockLoggedIn(auth);
+
+			// Mock logged in user.
+			auth.user = {
+				tokenManager: {
+					idToken: 'idTokenString',
+					// Mock old expiration time
+					expiresAt: Date.now() - 1000
+				}
+			};
+
+			const listener = jest.fn(() => {});
+			auth.listen(listener);
+			const tm = await auth.refreshIdToken(false);
+
+			expect(listener).toHaveBeenCalledTimes(0);
+			expect(localStorage.getItem(auth.sKey('User'))).toEqual(null);
+			expect(tm).toEqual({ refreshToken: 'updated', idToken: 'updated', expiresAt: NaN });
+		});
 	});
 
 	describe('AuthorizedRequest()', () => {
@@ -427,13 +484,7 @@ describe('Auth', () => {
 
 			const auth = new Auth({ apiKey: 'key' });
 
-			// Wait for the initialization.
-			await new Promise(resolve => {
-				auth.listen(resolve);
-			});
-
-			// Mock logged in user.
-			auth.user = mockUserData;
+			await mockLoggedIn(auth);
 
 			await auth.authorizedRequest('http://google.com');
 
@@ -629,15 +680,8 @@ describe('Auth', () => {
 		test('Sends correct request to "verify email"', async () => {
 			const auth = new Auth({ apiKey: 'key' });
 
-			// Wait for the initialization.
-			await new Promise(resolve => {
-				auth.listen(resolve);
-			});
-
-			// Mock logged user.
-			auth.user = mockUserData;
-
 			fetch.mockResponse('{}');
+			await mockLoggedIn(auth);
 			await auth.sendOobCode('VERIFY_EMAIL');
 
 			expect(fetch.mock.calls[0][1].body).toEqual(
@@ -653,15 +697,9 @@ describe('Auth', () => {
 		test('Ignores the email field when making "verify email" request', async () => {
 			const auth = new Auth({ apiKey: 'key' });
 
-			// Wait for the initialization.
-			await new Promise(resolve => {
-				auth.listen(resolve);
-			});
-
-			// Mock logged user.
-			auth.user = mockUserData;
-
 			fetch.mockResponse('{}');
+
+			await mockLoggedIn(auth);
 			await auth.sendOobCode('VERIFY_EMAIL', 'myemail@email.com');
 
 			expect(fetch.mock.calls[0][1].body).toEqual(
@@ -703,9 +741,9 @@ describe('Auth', () => {
 	describe('resetPassword()', () => {
 		test('Sends the correct request', async () => {
 			const auth = new Auth({ apiKey: 'key' });
-			auth.user = mockUserData;
-
 			fetch.mockResponse('{}');
+
+			await mockLoggedIn(auth);
 			await auth.resetPassword('code', 'password');
 
 			expect(fetch.mock.calls[0][1].body).toEqual(
@@ -718,9 +756,9 @@ describe('Auth', () => {
 
 		test('Only sends oobCode when password is missing', async () => {
 			const auth = new Auth({ apiKey: 'key' });
-			auth.user = mockUserData;
-
 			fetch.mockResponse('{}');
+
+			await mockLoggedIn(auth);
 			await auth.resetPassword('code');
 
 			expect(fetch.mock.calls[0][1].body).toEqual('{"oobCode":"code"}');
@@ -728,9 +766,9 @@ describe('Auth', () => {
 
 		test('Returns the email of the account', async () => {
 			const auth = new Auth({ apiKey: 'key' });
-			auth.user = mockUserData;
-
 			fetch.mockResponse('{ "email": "test@mail.com" }');
+
+			await mockLoggedIn(auth);
 			const response = await auth.resetPassword('code', 'password');
 
 			expect(response).toEqual('test@mail.com');
@@ -786,10 +824,9 @@ describe('Auth', () => {
 
 		test('Makes correct request', async () => {
 			const auth = new Auth({ apiKey: 'key' });
-			auth.user = mockUserData;
-
 			fetch.mockResponse(`{ "users": [${JSON.stringify(mockUserData)}] }`);
 
+			await mockLoggedIn(auth);
 			await auth.fetchProfile();
 
 			expect(fetch.mock.calls[0][1].body).toEqual('{"idToken":"idTokenString"}');
@@ -797,10 +834,9 @@ describe('Auth', () => {
 
 		test('Persists the user data to storage', async () => {
 			const auth = new Auth({ apiKey: 'key' });
-			auth.user = mockUserData;
-
 			fetch.mockResponse(`{ "users": [${JSON.stringify(mockUserData)}] }`);
 
+			await mockLoggedIn(auth);
 			await auth.fetchProfile();
 			const storedData = JSON.parse(localStorage.getItem('Auth:User:key:default'));
 

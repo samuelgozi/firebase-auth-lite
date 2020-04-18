@@ -61,7 +61,8 @@ export default class Auth {
 
 		this.storage.get(this.sKey('User')).then(user => {
 			this.user = JSON.parse(user);
-			return user ? this.fetchProfile() : this.emit();
+			if (user) this.refreshIdToken(false).then(tm => this.fetchProfile(tm));
+			else this.emit();
 		});
 
 		// Because this library is used in react native, outside the browser as well,
@@ -171,7 +172,7 @@ export default class Auth {
 	 * only if the idToken has expired.
 	 * @private
 	 */
-	async refreshIdToken() {
+	async refreshIdToken(persist = true) {
 		// If the idToken didn't expire, return.
 		if (Date.now() < this.user.tokenManager.expiresAt) return;
 
@@ -186,15 +187,17 @@ export default class Auth {
 			this.refreshRequest = this.api('token', {
 				grant_type: 'refresh_token',
 				refresh_token: this.user.tokenManager.refreshToken
+			}).then(async data => {
+				const tokenManager = {
+					idToken: data.id_token,
+					refreshToken: data.refresh_token,
+					expiresAt: data.expiresAt
+				};
+				if (persist) await this.persistSession({ ...this.user, tokenManager });
+				return tokenManager;
 			});
 
-			const { id_token: idToken, refresh_token: refreshToken, expiresAt } = await this.refreshRequest;
-
-			await this.persistSession({
-				...this.user,
-				// Rename the data names to match the ones used in the app.
-				tokenManager: { idToken, refreshToken, expiresAt }
-			});
+			return await this.refreshRequest;
 		} finally {
 			this.refreshRequest = null;
 		}
@@ -222,13 +225,13 @@ export default class Auth {
 	 */
 	async signInWithCustomToken(token) {
 		// Try to exchange the Auth Code for an idToken and refreshToken.
-		const { idToken, refreshToken, expiresAt } = await this.api('signInWithCustomToken', {
-			token,
-			returnSecureToken: true
-		});
-
-		// Now get the user profile.
-		await this.fetchProfile({ idToken, refreshToken, expiresAt });
+		// And then get the user profile.
+		return await this.fetchProfile(
+			await this.api('signInWithCustomToken', {
+				token,
+				returnSecureToken: true
+			})
+		);
 	}
 
 	/**
@@ -335,14 +338,14 @@ export default class Auth {
 	 * @param {string} [password] The password for the user to create.
 	 */
 	async signUp(email, password) {
-		const { idToken, refreshToken, expiresAt } = await this.api('signUp', {
-			email,
-			password,
-			returnSecureToken: true
-		});
-
-		// Get the user profile and persists the session.
-		await this.fetchProfile({ idToken, refreshToken, expiresAt });
+		// Sign up and then retrieve the user profile and persists the session.
+		return await this.fetchProfile(
+			await this.api('signUp', {
+				email,
+				password,
+				returnSecureToken: true
+			})
+		);
 	}
 
 	/**
@@ -351,14 +354,14 @@ export default class Auth {
 	 * @param {string} password
 	 */
 	async signIn(email, password) {
-		const { idToken, refreshToken, expiresAt } = await this.api('signInWithPassword', {
-			email,
-			password,
-			returnSecureToken: true
-		});
-
-		// Get the user profile and persists the session.
-		await this.fetchProfile({ idToken, refreshToken, expiresAt });
+		// Sign up and then retrieve the user profile and persists the session.
+		return await this.fetchProfile(
+			await this.api('signInWithPassword', {
+				email,
+				password,
+				returnSecureToken: true
+			})
+		);
 	}
 
 	/**
@@ -411,7 +414,7 @@ export default class Auth {
 	 * @throws Will throw if the user is not signed in.
 	 */
 	async fetchProfile(tokenManager = this.user && this.user.tokenManager) {
-		!this.user && !tokenManager && (await this.enforceAuth());
+		if (!tokenManager) await this.enforceAuth();
 
 		const userData = (await this.api('lookup', { idToken: tokenManager.idToken })).users[0];
 
