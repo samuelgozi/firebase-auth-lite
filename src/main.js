@@ -30,8 +30,8 @@ import humanReadableErrors from './errors.json';
 
 // Generate a local storage adapter.
 // Its a bit verbose, but takes less characters than writing it manually.
-const localStorageAdapter = {};
-['set', 'get', 'remove'].forEach(m => (localStorageAdapter[m] = async (k, v) => localStorage[m + 'Item'](k, v)));
+const storageApi = {};
+['set', 'get', 'remove'].forEach(m => (storageApi[m] = async (k, v) => localStorage[m + 'Item'](k, v)));
 
 /**
  * Encapsulates authentication flow logic.
@@ -41,7 +41,7 @@ const localStorageAdapter = {};
  * @param {Array.<ProviderOptions|string>} options.providers Array of arguments that will be passed to the addProvider method.
  */
 export default class Auth {
-	constructor({ name = 'default', apiKey, redirectUri, storage = localStorageAdapter } = {}) {
+	constructor({ name = 'default', apiKey, redirectUri, storage = storageApi } = {}) {
 		if (typeof apiKey !== 'string') throw Error('The argument "apiKey" is required');
 
 		Object.assign(this, {
@@ -54,7 +54,7 @@ export default class Auth {
 
 		this.storage.get(this.sKey('User')).then(user => {
 			this.user = JSON.parse(user);
-			if (user) this.refreshIdToken(false).then(tm => this.fetchProfile(tm));
+			if (user) this.refreshIdToken().then(() => this.fetchProfile());
 			else this.emit();
 		});
 
@@ -65,7 +65,7 @@ export default class Auth {
 				// This code will run if localStorage for this user
 				// data was updated from a different browser window.
 				if (e.key !== this.sKey('User')) return;
-				this.persistSession(JSON.parse(e.newValue), false);
+				this.setState(JSON.parse(e.newValue), false);
 			});
 	}
 
@@ -146,10 +146,10 @@ export default class Auth {
 	 * @param {boolean} [updateStorage = true] Whether to update local storage or not.
 	 * @private
 	 */
-	async persistSession(userData, updateStorage = true) {
-		if (updateStorage) await this.storage[userData ? 'set' : 'remove'](this.sKey('User'), JSON.stringify(userData));
+	async setState(userData, persist = true, emit = true) {
 		this.user = userData;
-		this.emit();
+		persist && (await this.storage[userData ? 'set' : 'remove'](this.sKey('User'), JSON.stringify(userData)));
+		emit && this.emit();
 	}
 
 	/**
@@ -157,7 +157,7 @@ export default class Auth {
 	 * Removes all data stored in the storage that's associated with the user.
 	 */
 	signOut() {
-		return this.persistSession(null);
+		return this.setState(null);
 	}
 
 	/**
@@ -165,34 +165,32 @@ export default class Auth {
 	 * only if the idToken has expired.
 	 * @private
 	 */
-	async refreshIdToken(persist = true) {
+	async refreshIdToken() {
 		// If the idToken didn't expire, return.
 		if (Date.now() < this.user.tokenManager.expiresAt) return;
 
 		// If a request for a new token was already made, then wait for it and then return.
-		if (this.refreshRequest) {
-			return await this.refreshRequest;
+		if (this._ref) {
+			return void (await this._ref);
 		}
 
 		try {
 			// Save the promise so that if this function is called
 			// anywhere else we don't make more than one request.
-			this.refreshRequest = this.api('token', {
+			this._ref = this.api('token', {
 				grant_type: 'refresh_token',
 				refresh_token: this.user.tokenManager.refreshToken
-			}).then(async data => {
+			}).then(data => {
 				const tokenManager = {
 					idToken: data.id_token,
 					refreshToken: data.refresh_token,
 					expiresAt: data.expiresAt
 				};
-				if (persist) await this.persistSession({ ...this.user, tokenManager });
-				return tokenManager;
+				return this.setState({ ...this.user, tokenManager }, true, false);
 			});
-
-			return await this.refreshRequest;
+			await this._ref;
 		} finally {
-			this.refreshRequest = null;
+			this._ref = null;
 		}
 	}
 
@@ -237,17 +235,18 @@ export default class Auth {
 			throw Error('In order to use an Identity provider you should initiate the "Auth" instance with a "redirectUri".');
 
 		// The options can be a string, or an object, so here we make sure we extract the right data in each case.
-		const { provider, scope, context, linkAccount } = typeof options === 'string' ? { provider: options } : options;
+		const { provider, oauthScope, context, linkAccount } =
+			typeof options === 'string' ? { provider: options } : options;
 
 		// Make sure the user is logged in when an "account link" was requested.
 		if (linkAccount) await this.enforceAuth();
 
 		// Get the url and other data necessary for the authentication.
 		const { authUri, sessionId } = await this.api('createAuthUri', {
-			providerId: provider,
 			continueUri: this.redirectUri,
-			oauthScope: scope,
 			authFlowType: 'CODE_FLOW',
+			providerId: provider,
+			oauthScope,
 			context
 		});
 
@@ -407,7 +406,7 @@ export default class Auth {
 		delete userData.kind;
 		userData.tokenManager = tokenManager;
 
-		await this.persistSession(userData);
+		await this.setState(userData);
 	}
 
 	/**
@@ -437,7 +436,7 @@ export default class Auth {
 		delete updatedData.idToken;
 		delete updatedData.refreshToken;
 
-		await this.persistSession(updatedData);
+		await this.setState(updatedData);
 	}
 
 	/**

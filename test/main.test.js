@@ -53,11 +53,6 @@ describe('localStorageAdapter()', () => {
 	test('get() returns an item from local storage', async () => {
 		expect(await auth.storage.get('testKey')).toEqual('testValue');
 	});
-
-	test('delete() removes an item from local storage', async () => {
-		await auth.storage.remove('testKey');
-		expect(localStorage.getItem('testKey')).toEqual(null);
-	});
 });
 
 describe('Auth', () => {
@@ -282,24 +277,27 @@ describe('Auth', () => {
 		});
 	});
 
-	describe('perssistSession()', () => {
+	describe('setState()', () => {
 		test('Stores the user data locally', async () => {
 			const auth = new Auth({ apiKey: 'key' });
-			await auth.persistSession({ test: 'working' });
+			await auth.setState({ test: 'working' });
 
 			expect(await auth.storage.get('Auth:User:key:default')).toEqual(JSON.stringify({ test: 'working' }));
 		});
 
 		test("Doens't update storage when second argument is false", async () => {
 			const auth = new Auth({ apiKey: 'key' });
-			await auth.persistSession({ test: 'working' }, false);
+			await auth.setState({ test: 'working' }, false);
 
 			expect(await auth.storage.get('Auth:User:key:default')).toEqual(null);
 		});
 
 		test('Updates the "user" property with the new data', async () => {
 			const auth = new Auth({ apiKey: 'key' });
-			await auth.persistSession({ test: 'working' });
+
+			// Wait instantiation to finish.
+			await new Promise(resolve => auth.listen(resolve));
+			await auth.setState({ test: 'working' });
 
 			expect(auth.user).toEqual({ test: 'working' });
 		});
@@ -310,7 +308,7 @@ describe('Auth', () => {
 			const callback = jest.fn(() => {});
 			auth.listen(callback);
 
-			await auth.persistSession();
+			await auth.setState();
 
 			// One time in instantiation, and one
 			// time for the called method.
@@ -322,10 +320,7 @@ describe('Auth', () => {
 		test('Deletes user data from storage', async () => {
 			const auth = new Auth({ apiKey: 'key' });
 
-			// Mock logged in user.
-			await auth.persistSession('test');
-
-			// sign out.
+			await mockLoggedIn(auth);
 			await auth.signOut();
 
 			expect(localStorage.getItem('Auth:User:key:default')).toEqual(null);
@@ -439,7 +434,7 @@ describe('Auth', () => {
 			expect(auth.user.tokenManager.idToken).toEqual('updated');
 		});
 
-		test("Doesn't update local storage or emits when persist is set to false", async () => {
+		test("Doesn't emit", async () => {
 			// The constructor makes some requests.
 			// We have to mock them for this not to throw
 			fetch.mockResponse('{"refresh_token": "updated", "id_token": "updated"}');
@@ -458,11 +453,9 @@ describe('Auth', () => {
 
 			const listener = jest.fn(() => {});
 			auth.listen(listener);
-			const tm = await auth.refreshIdToken(false);
+			await auth.refreshIdToken();
 
 			expect(listener).toHaveBeenCalledTimes(0);
-			expect(localStorage.getItem(auth.sKey('User'))).toEqual(null);
-			expect(tm).toEqual({ refreshToken: 'updated', idToken: 'updated', expiresAt: NaN });
 		});
 	});
 
@@ -556,9 +549,9 @@ describe('Auth', () => {
 
 			expect(body).toEqual(
 				JSON.stringify({
-					providerId: 'google.com',
 					continueUri: 'redirectHere',
-					authFlowType: 'CODE_FLOW'
+					authFlowType: 'CODE_FLOW',
+					providerId: 'google.com'
 				})
 			);
 		});
