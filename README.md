@@ -107,18 +107,14 @@ If the data is correct and matches an existing user, the user will be signed in.
 
 ### Authenticate with Federated Identity Provider.
 
-Instantiate Auth, but this time you need to provide more arguments:
-
-1. `redirectUri` - When signing in with an IdP, the user will be redirected to their page, and later redirected back into our app. This is how we tell the IdP were to send the user back. It needs to be a page that will finish the sign in flow by running a method(read below how).
-2. `providers` - An array of the names of the providers we have set up. the names should include the domain, for example: `google.com`, `facebook.com`, `twitter.com`, `apple.com` etc. You can also pass an object instead, if you whish to request a specific scope in the next format: `{name: "facebook.com", scope: "email, profile, etc..."}`
+When signing in with an IdP, the user will be redirected to their page, and later redirected back into our app. Because of this, wee need to tell the provider where to redirect to by using the `redirectUri` property. It needs to be a page that will finish the sign in flow by running a method(read below how).
 
 Please make sure the provider is correctly set up in the Firebase console.
 
 ```js
 const auth = new Auth({
 	apiKey: '[The Firebase API key]',
-	redirectUri: 'http://example.com/auth',
-	providers: ['google.com']
+	redirectUri: 'http://example.com/auth'
 });
 
 // This function will run when the user click the sign in button.
