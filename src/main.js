@@ -41,23 +41,16 @@ const localStorageAdapter = {};
  * @param {Array.<ProviderOptions|string>} options.providers Array of arguments that will be passed to the addProvider method.
  */
 export default class Auth {
-	constructor({ name = 'default', apiKey, redirectUri, providers = [], storage = localStorageAdapter } = {}) {
+	constructor({ name = 'default', apiKey, redirectUri, storage = localStorageAdapter } = {}) {
 		if (typeof apiKey !== 'string') throw Error('The argument "apiKey" is required');
-		if (!Array.isArray(providers)) throw Error('The argument "providers" must be an array');
 
 		Object.assign(this, {
 			name,
 			apiKey,
 			storage,
 			redirectUri,
-			providers: {},
 			listeners: []
 		});
-
-		for (const options of providers) {
-			const { name, scope } = typeof options === 'string' ? { name: options } : options;
-			this.providers[name] = scope;
-		}
 
 		this.storage.get(this.sKey('User')).then(user => {
 			this.user = JSON.parse(user);
@@ -244,23 +237,16 @@ export default class Auth {
 			throw Error('In order to use an Identity provider you should initiate the "Auth" instance with a "redirectUri".');
 
 		// The options can be a string, or an object, so here we make sure we extract the right data in each case.
-		const { provider, context, linkAccount } = typeof options === 'string' ? { provider: options } : options;
+		const { provider, scope, context, linkAccount } = typeof options === 'string' ? { provider: options } : options;
 
 		// Make sure the user is logged in when an "account link" was requested.
 		if (linkAccount) await this.enforceAuth();
-
-		// Get an array of the allowed providers names.
-		const allowedProviders = Object.keys(this.providers);
-
-		// Verify that the requested provider is indeed configured.
-		if (!allowedProviders.includes(provider))
-			throw Error(`You haven't configured "${provider}" with this "Auth" instance.`);
 
 		// Get the url and other data necessary for the authentication.
 		const { authUri, sessionId } = await this.api('createAuthUri', {
 			providerId: provider,
 			continueUri: this.redirectUri,
-			oauthScope: this.providers[provider],
+			oauthScope: scope,
 			authFlowType: 'CODE_FLOW',
 			context
 		});

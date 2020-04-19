@@ -72,16 +72,6 @@ describe('Auth', () => {
 			}).toThrow('The argument "apiKey" is required');
 		});
 
-		test('Throws when providers is not an array', () => {
-			expect(() => {
-				new Auth({ apiKey: 'key', providers: {} });
-			}).toThrow('The argument "providers" must be an array');
-
-			expect(() => {
-				new Auth({ apiKey: 'key', providers: 42 });
-			}).toThrow('The argument "providers" must be an array');
-		});
-
 		describe('Initializes the "user" property', () => {
 			test('Reads the username from storage when already logged in', async () => {
 				// The constructor makes some requests.
@@ -538,14 +528,6 @@ describe('Auth', () => {
 
 			await expect(auth.signInWithProvider()).rejects.toThrow(
 				'In order to use an Identity provider you should initiate the "Auth" instance with a "redirectUri".'
-			);
-		});
-
-		test('Throws if sign in with an unconfigured provider was made', async () => {
-			const auth = new Auth({ apiKey: 'key', redirectUri: 'redirectHere' });
-
-			await expect(auth.signInWithProvider({ provider: 'google' })).rejects.toThrow(
-				'You haven\'t configured "google" with this "Auth" instance.'
 			);
 		});
 
