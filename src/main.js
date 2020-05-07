@@ -2,7 +2,6 @@
  * Full documentation for the "identitytoolkit" API can be found here:
  * https://cloud.google.com/identity-platform/docs/reference/rest/v1/accounts
  */
-import humanReadableErrors from './errors.json';
 
 /**
  * Settings object for an IDP(Identity Provider).
@@ -117,10 +116,11 @@ export default class Auth {
 		}).then(async response => {
 			let data = await response.json();
 
-			// If the response has an error, check to see if we have a human readable version of it,
-			// and throw that instead.
+			// If the response returned an error, try to get a Firebase error code/message.
+			// Sometimes the error codes are joined with an explanation, we don't need that(its a bug).
+			// So we remove the unnecessary part.
 			if (!response.ok) {
-				throw Error(humanReadableErrors[data.error.message] || data.error.message);
+				throw Error(data.error.message.match(/^[A-Z_]+/)[0] || data.error.message);
 			}
 
 			// Add a hidden date property to the returned object.
