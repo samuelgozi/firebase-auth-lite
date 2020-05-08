@@ -120,7 +120,7 @@ export default class Auth {
 			// Sometimes the error codes are joined with an explanation, we don't need that(its a bug).
 			// So we remove the unnecessary part.
 			if (!response.ok) {
-				throw Error(data.error.message.match(/^[A-Z_]+/)[0] || data.error.message);
+				throw Error(data.error.message.replace(/: [\w ,.'"()]+$/, ''));
 			}
 
 			// Add a hidden date property to the returned object.

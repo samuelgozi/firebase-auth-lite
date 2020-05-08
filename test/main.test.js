@@ -257,6 +257,48 @@ describe('Auth', () => {
 		});
 	});
 
+	describe('api()', () => {
+		test('errors are parsed correctly', async () => {
+			fetch.mockResponses(
+				[
+					JSON.stringify({
+						error: {
+							code: 400,
+							message: 'OPERATION_NOT_ALLOWED : The identity provider configuration is disabled.'
+						}
+					}),
+					{ status: 400 }
+				],
+
+				[
+					JSON.stringify({
+						error: {
+							code: 400,
+							message: 'EMAIL_NOT_FOUND'
+						}
+					}),
+					{ status: 400 }
+				],
+
+				[
+					JSON.stringify({
+						error: {
+							code: 400,
+							message: "Invalid value at 'id_token' (TYPE_STRING), false"
+						}
+					}),
+					{ status: 400 }
+				]
+			);
+
+			const auth = new Auth({ apiKey: 'key' });
+
+			await expect(auth.api('test', 'body')).rejects.toThrow('OPERATION_NOT_ALLOWED');
+			await expect(auth.api('test', 'body')).rejects.toThrow('EMAIL_NOT_FOUND');
+			await expect(auth.api('test', 'body')).rejects.toThrow("Invalid value at 'id_token' (TYPE_STRING), false");
+		});
+	});
+
 	describe('enforceAuth()', () => {
 		test('Throws when the user is not logged in', async () => {
 			const auth = new Auth({ apiKey: 'key' });
