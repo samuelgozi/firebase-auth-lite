@@ -9,6 +9,12 @@ const localStorageAdapter = {
         return await localStorage.setItem(key, value);
     },
 };
+/* Google generates accessTokens that expire after 1 hour. However, we want to avoid the case
+ * where a token expires mid flight by prematurely setting the expiration time. */
+function getExpiresAt() {
+    // 45 minutes in the future
+    return Date.now() + 2700 * 1000;
+}
 /**
  * Settings object for an IDP(Identity Provider).
  * @typedef {Object} ProviderOptions
@@ -175,7 +181,7 @@ export default class Auth {
         }
         try {
             // Calculated expiration time for the new token.
-            const expiresAt = Date.now() + 3600 * 1000;
+            const expiresAt = getExpiresAt();
             // Save the promise so that if this function is called
             // anywhere else we don't make more than one request.
             this.refreshTokenRequest = this.api('token', {
@@ -215,7 +221,7 @@ export default class Auth {
      */
     async signInWithCustomToken(token) {
         // Calculate the expiration date for the idToken.
-        const expiresAt = Date.now() + 3600 * 1000;
+        const expiresAt = getExpiresAt();
         // Try to exchange the Auth Code for an idToken and refreshToken.
         const { idToken, refreshToken } = await this.api('signInWithCustomToken', { token, returnSecureToken: true });
         // Now get the user profile.
@@ -229,7 +235,7 @@ export default class Auth {
      */
     async signUp(email, password) {
         // Calculate the expiration date for the idToken.
-        const expiresAt = Date.now() + 3600 * 1000;
+        const expiresAt = getExpiresAt();
         const { idToken, refreshToken } = await this.api('signUp', {
             email,
             password,
@@ -245,7 +251,7 @@ export default class Auth {
      */
     async signIn(email, password) {
         // Calculate the expiration date for the idToken.
-        const expiresAt = Date.now() + 3600 * 1000;
+        const expiresAt = getExpiresAt();
         const { idToken, refreshToken } = await this.api('signInWithPassword', {
             email,
             password,
