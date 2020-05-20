@@ -1,55 +1,121 @@
 /**
- * Full documentation for the "identitytoolkit" API can be found here:
+ * Partial documentation fot the Firebase API can be found here.
  * https://cloud.google.com/identity-platform/docs/reference/rest/v1/accounts
  */
 
-/**
- * Settings object for an IDP(Identity Provider).
- * @typedef {Object} ProviderOptions
- * @property {string} options.name The name of the provider in lowercase.
- * @property {string} [options.scope] The scopes for the IDP, this is optional and defaults to "openid email".
- */
+interface ProvidersForEmail {
+	allProviders: string[];
+	registered: boolean;
+	sessionId: string;
+	signinMethods: string[];
+}
 
-/**
- * Object response from a "fetchProvidersForEmail" request.
- * @typedef {Object} ProvidersForEmailResponse
- * @property {Array.<string>} allProviders All providers the user has once used to do federated login
- * @property {boolean} registered All sign-in methods this user has used.
- * @property {string} sessionId Session ID which should be passed in the following verifyAssertion request
- * @property {Array.<string>} signinMethods All sign-in methods this user has used.
- */
+interface ProviderUserInfo {
+	providerId: string;
+	federatedId: string;
+	rawId: string;
 
-/**
- * Setting object for the "startOauthFlow" method.
- * @typedef {Object} oauthFlowOptions
- * @property {string} provider Name of the provider to use.
- * @property {string} [context] A string that will be returned after the Oauth flow is finished, should be used to retain context.
- * @property {boolean} [linkAccount = false] Whether to link this oauth account with the current account. defaults to false.
- */
+	email?: string;
+	displayName?: string;
+	photoUrl?: string;
+	screenName?: string;
+	phoneNumber?: string;
+}
 
-// Generate a local storage adapter.
-// Its a bit verbose, but takes less characters than writing it manually.
-const storageApi = {};
-['set', 'get', 'remove'].forEach(m => (storageApi[m] = async (k, v) => localStorage[m + 'Item'](k, v)));
+interface UserInfo {
+	localId: string;
+	lastLoginAt: string;
+	createdAt: string;
+	lastRefreshAt: string;
 
-/**
- * Encapsulates authentication flow logic.
- * @param {Object} options Options object.
- * @param {string} options.apiKey The firebase API key
- * @param {string} options.redirectUri The redirect URL used by OAuth providers.
- * @param {Array.<ProviderOptions|string>} options.providers Array of arguments that will be passed to the addProvider method.
- */
+	validSince?: string;
+	emailVerified?: boolean;
+	displayName?: string;
+	email?: string;
+	language?: string;
+	photoUrl?: string;
+	timeZone?: string;
+	dateOfBirth?: string;
+	passwordHash?: string;
+	salt?: string;
+	version?: number;
+	passwordUpdatedAt?: number;
+	providerUserInfo?: ProviderUserInfo[];
+	disabled?: boolean;
+	screenName?: string;
+	customAuth?: boolean;
+	rawPassword?: string;
+	phoneNumber?: string;
+	customAttributes?: string;
+	emailLinkSignin?: boolean;
+	tenantId?: string;
+	initialEmail?: string;
+}
+
+interface TokenManager {
+	idToken: string;
+	refreshToken: string;
+	expiresAt: number;
+}
+
+interface User extends UserInfo {
+	tokenManager: TokenManager;
+}
+
+interface Storage {
+	/** Save to local storage */
+	set(key: string, value: string): Promise<void>;
+	/** Get from local storage */
+	get(key: string): Promise<string | null>;
+	/** Remove from local storage */
+	remove(key: string): Promise<void>;
+}
+
+interface ProviderSignInOptions {
+	provider: string;
+	oauthScope?: string;
+	context?: string;
+	linkAccount?: boolean;
+}
+
+interface AuthInit {
+	/** Name for this auth instance */
+	name?: string;
+	/** Firebase API Key for this project */
+	apiKey: string;
+	/** The uri to use as redirect for provider's sign-in */
+	redirectUri?: string;
+	/** Storage API to use for persisting data locally*/
+	storage?: Storage;
+}
+
+const storageApi: Storage = {
+	async set(k: string, v: string) {
+		return localStorage.setItem(k, v);
+	},
+
+	async get(k: string) {
+		return localStorage.getItem(k);
+	},
+
+	async remove(k: string) {
+		return localStorage.removeItem(k);
+	}
+};
+
 export default class Auth {
-	constructor({ name = 'default', apiKey, redirectUri, storage = storageApi } = {}) {
-		if (typeof apiKey !== 'string') throw Error('The argument "apiKey" is required');
+	readonly apiKey: string;
+	readonly name: string = 'default';
+	readonly storage: Storage = storageApi;
+	readonly redirectUri: string;
+	private listeners = [];
+	private ref?: Promise<any>;
+	user?: User;
 
-		Object.assign(this, {
-			name,
-			apiKey,
-			storage,
-			redirectUri,
-			listeners: []
-		});
+	constructor(init: AuthInit = {} as AuthInit) {
+		if (typeof init.apiKey !== 'string') throw Error('The argument "apiKey" is required');
+
+		Object.assign(this, init);
 
 		this.storage.get(this.sKey('User')).then(user => {
 			this.setState(JSON.parse(user), false);
@@ -67,43 +133,16 @@ export default class Auth {
 			});
 	}
 
-	/**
-	 * Emits an event and triggers all of the listeners.
-	 * @param {string} name The name of the event to trigger.
-	 * @param {any} data The data you want to pass to the event listeners.
-	 * @private
-	 */
-	emit() {
+	private emit() {
 		this.listeners.forEach(cb => cb(this.user));
 	}
 
-	/**
-	 * Set up a function that will be called whenever the user state is changed.
-	 * @param {function} cb The function to call when the event is triggered.
-	 * @returns {function} function that will unsubscribe your callback from being called.
-	 */
-	listen(cb) {
-		this.listeners.push(cb);
-
-		// Return a function to unbind the callback.
-		return () => (this.listeners = this.listeners.filter(fn => fn !== cb));
-	}
-
-	/**
-	 * Generates a unique storage key for this app.
-	 * @private
-	 */
-	sKey(key) {
+	private sKey(key) {
 		return `Auth:${key}:${this.apiKey}:${this.name}`;
 	}
 
-	/**
-	 * Make post request to a specific endpoint, and return the response.
-	 * @param {string} endpoint The name of the endpoint.
-	 * @param {any} request Body to pass to the request.
-	 * @private
-	 */
-	api(endpoint, body) {
+	/** Make post request to a specific endpoint, and return the response */
+	private api(endpoint: string, body: any): any {
 		const url =
 			endpoint === 'token'
 				? `https://securetoken.googleapis.com/v1/token?key=${this.apiKey}`
@@ -131,24 +170,28 @@ export default class Auth {
 
 	/**
 	 * Makes sure the user is logged in and has up-to-date credentials.
-	 * @throws Will throw if the user is not logged in.
-	 * @private
+	 * @throws
 	 */
-	async enforceAuth() {
+	private async enforceAuth() {
 		if (!this.user) throw Error('The user must be logged-in to use this method.');
 		return this.refreshIdToken(); // Won't do anything if the token is valid.
 	}
 
-	/**
-	 * Updates the user data in the localStorage.
-	 * @param {Object} userData the new user data.
-	 * @param {boolean} [updateStorage = true] Whether to update local storage or not.
-	 * @private
-	 */
-	async setState(userData, persist = true, emit = true) {
+	/** Updates the user data in the localStorage */
+	private async setState(userData: User, persist = true, emit = true) {
 		this.user = userData;
 		persist && (await this.storage[userData ? 'set' : 'remove'](this.sKey('User'), JSON.stringify(userData)));
 		emit && this.emit();
+	}
+
+	/**
+	 * Set up a function that will be called whenever the user state is changed.
+	 * @param  cb The function to call when the event is triggered.
+	 * @returns function that will unsubscribe your callback from being called.
+	 */
+	listen(cb: Function): Function {
+		this.listeners.push(cb);
+		return () => (this.listeners = this.listeners.filter(fn => fn !== cb));
 	}
 
 	/**
@@ -162,21 +205,20 @@ export default class Auth {
 	/**
 	 * Refreshes the idToken by using the locally stored refresh token
 	 * only if the idToken has expired.
-	 * @private
 	 */
-	async refreshIdToken() {
+	private async refreshIdToken(): Promise<void> {
 		// If the idToken didn't expire, return.
 		if (Date.now() < this.user.tokenManager.expiresAt) return;
 
 		// If a request for a new token was already made, then wait for it and then return.
-		if (this._ref) {
-			return void (await this._ref);
+		if (this.ref) {
+			return await this.ref;
 		}
 
 		try {
 			// Save the promise so that if this function is called
 			// anywhere else we don't make more than one request.
-			this._ref = this.api('token', {
+			this.ref = this.api('token', {
 				grant_type: 'refresh_token',
 				refresh_token: this.user.tokenManager.refreshToken
 			}).then(data => {
@@ -187,9 +229,9 @@ export default class Auth {
 				};
 				return this.setState({ ...this.user, tokenManager }, true, false);
 			});
-			await this._ref;
+			await this.ref;
 		} finally {
-			this._ref = null;
+			this.ref = null;
 		}
 	}
 
@@ -213,7 +255,7 @@ export default class Auth {
 	 * Signs in or signs up a user by exchanging a custom Auth token.
 	 * @param {string} token The custom token.
 	 */
-	async signInWithCustomToken(token) {
+	async signInWithCustomToken(token: string) {
 		// Try to exchange the Auth Code for an idToken and refreshToken.
 		// And then get the user profile.
 		return await this.fetchProfile(
@@ -227,13 +269,13 @@ export default class Auth {
 	/**
 	 * Start auth flow of a federated Id provider.
 	 * Will redirect the page to the federated login page.
-	 * @param {oauthFlowOptions|string} options An options object, or a string with the name of the provider.
 	 */
-	async signInWithProvider(options) {
+	async signInWithProvider(options: ProviderSignInOptions | string) {
 		if (!this.redirectUri)
 			throw Error('In order to use an Identity provider you should initiate the "Auth" instance with a "redirectUri".');
 
 		// The options can be a string, or an object, so here we make sure we extract the right data in each case.
+		// @ts-ignore
 		const { provider, oauthScope, context, linkAccount } =
 			typeof options === 'string' ? { provider: options } : options;
 
@@ -254,7 +296,7 @@ export default class Auth {
 		// (No docs on this...)
 		await this.storage.set(this.sKey('SessionId'), sessionId);
 		// Save if this is a fresh log-in or a "link account" request.
-		linkAccount && (await this.storage.set(this.sKey('LinkAccount'), true));
+		linkAccount && (await this.storage.set(this.sKey('LinkAccount'), 'true'));
 
 		// Finally - redirect the page to the auth endpoint.
 		location.assign(authUri);
@@ -291,14 +333,14 @@ export default class Auth {
 		// Remove sensitive data from the URLSearch params in the location bar.
 		history.replaceState(null, null, location.origin + location.pathname);
 
-		return context;
+		return context as string;
 	}
 
 	/**
 	 * Handles all sign in flows that complete via redirects.
 	 * Fails silently if no redirect was detected.
 	 */
-	async handleSignInRedirect() {
+	async handleSignInRedirect(): Promise<void | string> {
 		// Oauth Federated Identity Provider flow.
 		if (location.href.match(/[&?]code=/)) return this.finishProviderSignIn();
 
@@ -318,10 +360,8 @@ export default class Auth {
 	/**
 	 * Signs up with email and password or anonymously when no arguments are passed.
 	 * Automatically signs the user in on completion.
-	 * @param {string} [email] The email for the user to create.
-	 * @param {string} [password] The password for the user to create.
 	 */
-	async signUp(email, password) {
+	async signUp(email: string, password: string) {
 		// Sign up and then retrieve the user profile and persists the session.
 		return await this.fetchProfile(
 			await this.api('signUp', {
@@ -332,12 +372,8 @@ export default class Auth {
 		);
 	}
 
-	/**
-	 * Signs in a user with email and password.
-	 * @param {string} email
-	 * @param {string} password
-	 */
-	async signIn(email, password) {
+	/** Signs in a user with email and password */
+	async signIn(email?: string, password?: string) {
 		// Sign up and then retrieve the user profile and persists the session.
 		return await this.fetchProfile(
 			await this.api('signInWithPassword', {
@@ -374,10 +410,8 @@ export default class Auth {
 	/**
 	 * Sets a new password by using a reset code.
 	 * Can also be used to very oobCode by not passing a password.
-	 * @param {string} code
-	 * @returns {string} The email of the account to which the code was issued.
 	 */
-	async resetPassword(oobCode, newPassword) {
+	async resetPassword(oobCode: string, newPassword?: string): Promise<string> {
 		return (await this.api('resetPassword', { oobCode, newPassword })).email;
 	}
 
@@ -389,7 +423,7 @@ export default class Auth {
 	async fetchProvidersForEmail(email) {
 		const response = await this.api('createAuthUri', { identifier: email, continueUri: location.href });
 		delete response.kind;
-		return response;
+		return response as ProvidersForEmail;
 	}
 
 	/**
