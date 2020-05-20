@@ -256,9 +256,8 @@ export default class Auth {
           tokenManager: { idToken, refreshToken, expiresAt }
         });
       });
-    } catch (e) {
+    } finally {
       this.refreshTokenRequest = null;
-      throw e;
     }
     return this.refreshTokenRequest;
   }

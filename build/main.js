@@ -196,9 +196,8 @@ export default class Auth {
                 });
             });
         }
-        catch (e) {
+        finally {
             this.refreshTokenRequest = null;
-            throw e;
         }
         return this.refreshTokenRequest;
     }
