@@ -52,9 +52,8 @@ export default class Auth {
 		});
 
 		this.storage.get(this.sKey('User')).then(user => {
-			this.user = JSON.parse(user);
+			this.setState(JSON.parse(user), false);
 			if (user) this.refreshIdToken().then(() => this.fetchProfile());
-			else this.emit();
 		});
 
 		// Because this library is used in react native, outside the browser as well,

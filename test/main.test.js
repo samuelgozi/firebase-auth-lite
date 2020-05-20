@@ -92,7 +92,11 @@ describe('Auth', () => {
 				localStorage.setItem('Auth:User:key:default', JSON.stringify(mockUserData));
 				const auth = new Auth({ apiKey: 'key' });
 
-				// Await for the first update to happen.
+				// Await for the second update to happen.
+				// The first one is for data from local storage.
+				await new Promise(resolve => {
+					auth.listen(resolve);
+				});
 				const userData = await new Promise(resolve => {
 					auth.listen(resolve);
 				});
@@ -117,7 +121,12 @@ describe('Auth', () => {
 
 				const auth = new Auth({ apiKey: 'key' });
 
-				// Await for the first update to happen.
+				// Await for the second update to happen.
+				// the first one is from local storage.
+				await new Promise(resolve => {
+					auth.listen(resolve);
+				});
+
 				await new Promise(resolve => {
 					auth.listen(resolve);
 				});
