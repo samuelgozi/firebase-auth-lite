@@ -256,10 +256,10 @@ export default class Auth {
           tokenManager: { idToken, refreshToken, expiresAt }
         });
       });
+      await this.refreshTokenRequest;
     } finally {
       this.refreshTokenRequest = null;
     }
-    return this.refreshTokenRequest;
   }
 
   /**

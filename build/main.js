@@ -195,11 +195,11 @@ export default class Auth {
                     tokenManager: { idToken, refreshToken, expiresAt }
                 });
             });
+            await this.refreshTokenRequest;
         }
         finally {
             this.refreshTokenRequest = null;
         }
-        return this.refreshTokenRequest;
     }
     /**
      * Uses native fetch, but adds authorization headers otherwise the API is exactly the same as native fetch.
