@@ -186,7 +186,8 @@ export default class Auth {
       // If the response has an error, check to see if we have a human readable version of it,
       // and throw that instead.
       if (!response.ok) {
-        throw Error(data.error.message.split(' ')[0]);
+        const error = endpoint === 'token' ? data.error.message : data.error.message.split(' ')[0];
+        throw Error(error);
       }
 
       return data;
