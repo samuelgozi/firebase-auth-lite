@@ -119,7 +119,9 @@ export default class Auth {
 			// Sometimes the error codes are joined with an explanation, we don't need that(its a bug).
 			// So we remove the unnecessary part.
 			if (!response.ok) {
-				throw Error(data.error.message.replace(/: [\w ,.'"()]+$/, ''));
+				const code = data.error.message.replace(/: [\w ,.'"()]+$/, '');
+				if (code === 'TOKEN_EXPIRED') return void this.signOut();
+				throw Error(code);
 			}
 
 			// Add a hidden date property to the returned object.
