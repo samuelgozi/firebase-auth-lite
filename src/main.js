@@ -53,7 +53,13 @@ export default class Auth {
 
 		this.storage.get(this.sKey('User')).then(user => {
 			this.setState(JSON.parse(user), false);
-			if (user) this.refreshIdToken().then(() => this.fetchProfile());
+			if (this.user)
+				this.refreshIdToken()
+					.then(() => this.fetchProfile())
+					.catch(e => {
+						if (e.message === 'TOKEN_EXPIRED') return this.signOut();
+						throw e;
+					});
 		});
 
 		// Because this library is used in react native, outside the browser as well,
@@ -120,7 +126,6 @@ export default class Auth {
 			// So we remove the unnecessary part.
 			if (!response.ok) {
 				const code = data.error.message.replace(/: [\w ,.'"()]+$/, '');
-				if (code === 'TOKEN_EXPIRED') return void this.signOut();
 				throw Error(code);
 			}
 
