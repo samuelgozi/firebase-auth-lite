@@ -167,6 +167,8 @@ describe('Auth', () => {
 		});
 
 		test('Signs out a previously signed in user when their token has expired', async () => {
+			fetch.mockResponse('{"error": {"message": "TOKEN_EXPIRED"}}', { status: 403 });
+
 			// Previously signed in user
 			localStorage.setItem(
 				'Auth:User:key:default',
@@ -178,26 +180,28 @@ describe('Auth', () => {
 					}
 				})
 			);
-			fetch.mockResponse('{"error": {"message": "TOKEN_EXPIRED"}}', { status: 403 });
-			let auth;
-			let user;
-			const constructor = new Promise(resolve => {
-				auth = new Auth({ apiKey: 'key' });
 
-				// Wait for requests to be made.
-				// We need this because the constructor can't be async.
-				setTimeout(resolve, 1000);
+			const auth = new Auth({ apiKey: 'key' });
+
+			// First call to the listener will be done after reading the local storage.
+			// After that a request to update the user data will be made, and it will return
+			// the fetch error "TOKEN_EXPIRED", the constructor will catch that, then
+			// sign out the user and call the listener a second time.
+			let calls = 0;
+			const userData = await new Promise(resolve => {
+				auth.listen(user => {
+					calls++;
+					if (calls === 2) resolve(user);
+				});
 			});
 
-			auth.listen(authUser => {
-				user = user;
-			});
-			await constructor;
 			expect(fetch.mock.calls.length).toEqual(1);
-			expect(user).toBe(undefined);
+			expect(userData).toBe(null);
 		});
 
 		test('Signs out a previously signed in user when their token is invalid', async () => {
+			fetch.mockResponse('{"error": {"message": "INVALID_ID_TOKEN"}}', { status: 403 });
+
 			// Previously signed in user
 			localStorage.setItem(
 				'Auth:User:key:default',
@@ -209,23 +213,23 @@ describe('Auth', () => {
 					}
 				})
 			);
-			fetch.mockResponse('{"error": {"message": "INVALID_ID_TOKEN"}}', { status: 403 });
-			let auth;
-			let user;
-			const constructor = new Promise(resolve => {
-				auth = new Auth({ apiKey: 'key' });
 
-				// Wait for requests to be made.
-				// We need this because the constructor can't be async.
-				setTimeout(resolve, 1000);
+			const auth = new Auth({ apiKey: 'key' });
+
+			// First call to the listener will be done after reading the local storage.
+			// After that a request to update the user data will be made, and it will return
+			// the fetch error "INVALID_ID_TOKEN", the constructor will catch that, then
+			// sign out the user and call the listener a second time.
+			let calls = 0;
+			const userData = await new Promise(resolve => {
+				auth.listen(user => {
+					calls++;
+					if (calls === 2) resolve(user);
+				});
 			});
 
-			auth.listen(authUser => {
-				user = user;
-			});
-			await constructor;
 			expect(fetch.mock.calls.length).toEqual(1);
-			expect(user).toBe(undefined);
+			expect(userData).toBe(null);
 		});
 
 		describe('Storage events listener', () => {
