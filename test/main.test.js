@@ -166,6 +166,68 @@ describe('Auth', () => {
 			expect(fetch.mock.calls.length).toEqual(0);
 		});
 
+		test('Signs out a previously signed in user when their token has expired', async () => {
+			// Previously signed in user
+			localStorage.setItem(
+				'Auth:User:key:default',
+				JSON.stringify({
+					email: 'test@example.com',
+					tokenManager: {
+						idToken: 'idTokenString',
+						expiresAt: Date.now()
+					}
+				})
+			);
+			fetch.mockResponse('{"error": {"message": "TOKEN_EXPIRED"}}', { status: 403 });
+			let auth;
+			let user;
+			const constructor = new Promise(resolve => {
+				auth = new Auth({ apiKey: 'key' });
+
+				// Wait for requests to be made.
+				// We need this because the constructor can't be async.
+				setTimeout(resolve, 1000);
+			});
+
+			auth.listen(authUser => {
+				user = user;
+			});
+			await constructor;
+			expect(fetch.mock.calls.length).toEqual(1);
+			expect(user).toBe(undefined);
+		});
+
+		test('Signs out a previously signed in user when their token is invalid', async () => {
+			// Previously signed in user
+			localStorage.setItem(
+				'Auth:User:key:default',
+				JSON.stringify({
+					email: 'test@example.com',
+					tokenManager: {
+						idToken: 'idTokenString',
+						expiresAt: Date.now()
+					}
+				})
+			);
+			fetch.mockResponse('{"error": {"message": "INVALID_ID_TOKEN"}}', { status: 403 });
+			let auth;
+			let user;
+			const constructor = new Promise(resolve => {
+				auth = new Auth({ apiKey: 'key' });
+
+				// Wait for requests to be made.
+				// We need this because the constructor can't be async.
+				setTimeout(resolve, 1000);
+			});
+
+			auth.listen(authUser => {
+				user = user;
+			});
+			await constructor;
+			expect(fetch.mock.calls.length).toEqual(1);
+			expect(user).toBe(undefined);
+		});
+
 		describe('Storage events listener', () => {
 			test('updates the instance user data', () => {
 				const auth = new Auth({ apiKey: 'key' });
