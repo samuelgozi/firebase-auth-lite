@@ -27,8 +27,8 @@
  * @property {boolean} [linkAccount = false] Check whether to link this OAuth account with the current account. Defaults to false.
  */
 
-// Generate a local storage adapter.
-// Its a bit verbose, but takes less characters than writing it manually.
+// Generates a localStorage adapter.
+// It's a bit verbose, but takes less characters than writing it manually.
 const storageApi = {};
 ['set', 'get', 'remove'].forEach(m => (storageApi[m] = async (k, v) => localStorage[m + 'Item'](k, v)));
 
@@ -287,7 +287,7 @@ export default class Auth {
 				? { provider: options }
 				: options;
 
-		// Make sure the user is signed-in when an 'account link' was requested.
+		// Make sure the user is signed-in when an "account link" was requested.
 		if (linkAccount) {
 			await this.enforceAuth();
 		}
@@ -306,7 +306,7 @@ export default class Auth {
 		// this is used to mitigate CSRF attacks (no docs on this...).
 		await this.storage.set(this.sKey('SessionId'), sessionId);
 
-		// Save if this is a fresh sign-in or a 'link account' request.
+		// Save if this is a fresh sign-in or a "link account" request.
 		if (linkAccount) {
 			await this.storage.set(this.sKey('LinkAccount'), true);
 		}
@@ -317,14 +317,14 @@ export default class Auth {
 
 	/**
 	 * Signs in or signs up a user using credentials from an Identity Provider (IdP) after a redirect.
-	 * It will fail silently if the URL doesn't have a 'code' search param.
+	 * It will fail silently if the URL doesn't have a "code" search param.
 	 * @param {string} [requestUri] The request URI with the authorization code, state, etc. from the IdP.
 	 * @private
 	 */
 	async finishProviderSignIn(requestUri = location.href) {
 		// Get the sessionId we received before the redirect from storage.
 		const sessionId = await this.storage.get(this.sKey('SessionId'));
-		// Get the indication if this was a 'link account' request.
+		// Get the indication if this was a "link account" request.
 		const linkAccount = await this.storage.get(this.sKey('LinkAccount'));
 
 		// Check for the edge case in which the user signed-out
@@ -340,7 +340,7 @@ export default class Auth {
 			const { idToken, refreshToken, expiresAt, context } = await this.api(
 				'signInWithIdp',
 				{
-					// If this is a 'link account' flow, then attach the idToken of the currently signed-in account.
+					// If this is a "link account" flow, then attach the idToken of the currently signed-in account.
 					idToken: linkAccount ? this.user.tokenManager.idToken : undefined,
 					requestUri,
 					sessionId,
@@ -420,7 +420,7 @@ export default class Auth {
 	 * Sends an out-of-band confirmation code for an account.
 	 * It can be used to reset a password, to verify an email address and send a sign-in email link.
 	 * The email argument is not needed if verifying an email (the argument is ignored). Otherwise, it is required.
-	 * @param {'PASSWORD_RESET'|'VERIFY_EMAIL'|'EMAIL_SIGNIN'} requestType The type of out-of-band (OOB) code to send.
+	 * @param {"PASSWORD_RESET"|"VERIFY_EMAIL"|"EMAIL_SIGNIN"} requestType The type of out-of-band (OOB) code to send.
 	 * @param {string} [email] When the `requestType` is `PASSWORD_RESET` or `EMAIL_SIGNIN` you need to provide an email address.
 	 * @returns {Promise}
 	 */
