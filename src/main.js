@@ -30,7 +30,7 @@
 // Generates a localStorage adapter.
 // It's a bit verbose, but takes less characters than writing it manually.
 const storageApi = {};
-['set', 'get', 'remove'].forEach(m => (storageApi[m] = async (k, v) => localStorage[m + 'Item'](k, v)));
+['set', 'get', 'remove'].forEach(m => (storageApi[m] = async (k, v) => window.localStorage[m + 'Item'](k, v)));
 
 /**
  * Encapsulates authentication flow logic.
@@ -39,7 +39,7 @@ const storageApi = {};
  * @param {string} options.redirectUri The redirect URL used by OAuth providers.
  * @param {Array.<ProviderOptions|string>} options.providers Array of arguments that will be passed to the addProvider method.
  */
-export default class Auth {
+class Auth {
 	constructor({
 		apiKey,
 		redirectUri,
@@ -128,31 +128,31 @@ export default class Auth {
 	 * @param {any} request Body to pass to the request.
 	 * @private
 	 */
-	async api(endpoint, body) {
+	api(endpoint, body) {
 		const url =
 			endpoint === 'token'
 				? `https://securetoken.googleapis.com/v1/token?key=${this.apiKey}`
 				: `https://identitytoolkit.googleapis.com/v1/accounts:${endpoint}?key=${this.apiKey}`;
 
-		const response = await fetch(url, {
+		return fetch(url, {
 			method: 'POST',
-			body: typeof body === 'string' ? body : JSON.stringify(body),
-		});
-		let data = await response.json();
-		// If the response returned an error, try to get a Firebase error code/message.
-		// Sometimes the error codes are joined with an explanation, and we don't need that (it's a bug).
-		// So we remove the unnecessary part.
-		if (!response.ok) {
-			const code = data.error.message.replace(/: [\w ,.'"()]+$/, '');
-			throw Error(code);
-		}
+			body: typeof body === 'string' ? body : JSON.stringify(body)
+		}).then(async response => {
+			let data = await response.json();
 
-		// Calculate the expiration date for tokens.
-		Object.defineProperty(data, 'expiresAt', {
-			value: Date.parse(response.headers.get('date')) + 3600 * 1000,
-		});
+			// If the response returned an error, try to get a Firebase error code/message.
+			// Sometimes the error codes are joined with an explanation, we don't need that(its a bug).
+			// So we remove the unnecessary part.
+			if (!response.ok) {
+				const code = data.error.message.replace(/: [\w ,.'"()]+$/, '');
+				throw Error(code);
+			}
 
-		return data;
+			// Add a hidden date property to the returned object.
+			// Used mostly to calculate the expiration date for tokens.
+			Object.defineProperty(data, 'expiresAt', { value: Date.parse(response.headers.get('date')) + 3600 * 1000 });
+			return data;
+		});
 	}
 
 	/**
