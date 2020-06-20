@@ -193,8 +193,7 @@ export default class Auth {
 	}
 
 	/**
-	 * Refreshes the idToken by using the locally stored refresh token
-	 * only if the idToken has expired.
+	 * Refreshes the idToken by using the locally stored refresh token only if the idToken has expired.
 	 * @private
 	 */
 	async refreshIdToken() {
@@ -230,8 +229,7 @@ export default class Auth {
 	}
 
 	/**
-	 * Uses native fetch, but adds authorization headers, otherwise,
-	 * the API is exactly the same as native fetch.
+	 * Uses native fetch, but adds authorization headers, otherwise, the API is exactly the same as native fetch.
 	 * @param {Request|Object|string} resource A request to send. It can be a resource or an options object.
 	 * @param {Object} init An options object.
 	 */
