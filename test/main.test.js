@@ -637,7 +637,7 @@ describe('Auth', () => {
 			const auth = new Auth({ apiKey: 'key' });
 
 			await expect(auth.signInWithProvider()).rejects.toThrow(
-				'In order to use an Identity provider you should initiate the "Auth" instance with a "redirectUri".'
+				'In order to use an Identity provider, you should initiate the "Auth" instance with a "redirectUri".'
 			);
 		});
 
