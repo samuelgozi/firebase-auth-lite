@@ -3,8 +3,6 @@
  * https://cloud.google.com/identity-platform/docs/reference/rest/v1/accounts
  */
 
-import { localStorageAdapter } from './storage.js';
-
 /**
  * Sets object for an IDP (Identity Provider).
  * @typedef {Object} ProviderOptions
@@ -29,6 +27,11 @@ import { localStorageAdapter } from './storage.js';
  * @property {boolean} [linkAccount = false] Check whether to link this OAuth account with the current account. Defaults to false.
  */
 
+// Generate a local storage adapter.
+// Its a bit verbose, but takes less characters than writing it manually.
+const storageApi = {};
+['set', 'get', 'remove'].forEach(m => (storageApi[m] = async (k, v) => localStorage[m + 'Item'](k, v)));
+
 /**
  * Encapsulates authentication flow logic.
  * @param {Object} options Options object.
@@ -41,7 +44,7 @@ export default class Auth {
 		apiKey,
 		redirectUri,
 		name = 'default',
-		storage = localStorageAdapter,
+		storage = storageApi,
 	} = {}) {
 		if (!apiKey) {
 			throw Error('The argument "apiKey" is required');
