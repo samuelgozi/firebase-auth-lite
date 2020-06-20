@@ -87,21 +87,21 @@ export default class Auth {
 		}
 	}
 
-  /**
-   * Emits an event and triggers all of the listeners.
-   * @param {string} name Name of the event to trigger.
-   * @param {any} data Data you want to pass to the event listeners.
-   * @private
-   */
+	/**
+	 * Emits an event and triggers all of the listeners.
+	 * @param {string} name Name of the event to trigger.
+	 * @param {any} data Data you want to pass to the event listeners.
+	 * @private
+	 */
 	emit() {
 		this.listeners.forEach(callback => callback(this.user));
 	}
 
-  /**
-   * Sets up a function that will be called whenever the user state is changed.
-   * @param {function} callback Function to call when the event is triggered.
-   * @returns {function} The function that unsubscribes your callback after being called.
-   */
+	/**
+	 * Sets up a function that will be called whenever the user state is changed.
+	 * @param {function} callback Function to call when the event is triggered.
+	 * @returns {function} The function that unsubscribes your callback after being called.
+	 */
 	listen(callback) {
 		this.listeners.push(callback);
 
@@ -111,20 +111,20 @@ export default class Auth {
 		};
 	}
 
-  /**
-   * Generates a unique storage key for this app.
-   * @private
-   */
+	/**
+	 * Generates a unique storage key for this app.
+	 * @private
+	 */
 	sKey(key) {
 		return `Auth:${key}:${this.apiKey}:${this.name}`;
 	}
 
-  /**
-   * Makes post request to a specific endpoint, and return the response.
-   * @param {string} endpoint Name of the endpoint.
-   * @param {any} request Body to pass to the request.
-   * @private
-   */
+	/**
+	 * Makes post request to a specific endpoint, and return the response.
+	 * @param {string} endpoint Name of the endpoint.
+	 * @param {any} request Body to pass to the request.
+	 * @private
+	 */
 	async api(endpoint, body) {
 		const url =
 			endpoint === "token"
@@ -152,11 +152,11 @@ export default class Auth {
 		return data;
 	}
 
-  /**
-   * Makes sure the user is signed-in and has up-to-date credentials.
-   * @throws Will throw if the user is not signed-in.
-   * @private
-   */
+	/**
+	 * Makes sure the user is signed-in and has up-to-date credentials.
+	 * @throws Will throw if the user is not signed-in.
+	 * @private
+	 */
 	async enforceAuth() {
 		if (this.user) {
 			return this.refreshIdToken(); // Won't do anything if the token is valid.
@@ -165,12 +165,12 @@ export default class Auth {
 		}
 	}
 
-  /**
-   * Updates the user data in localStorage.
-   * @param {Object} userData New user data.
-   * @param {boolean} [updateStorage = true] Check whether to update localStorage or not.
-   * @private
-   */
+	/**
+	 * Updates the user data in localStorage.
+	 * @param {Object} userData New user data.
+	 * @param {boolean} [updateStorage = true] Check whether to update localStorage or not.
+	 * @private
+	 */
 	async setState(userData, persist = true, emit = true) {
 		this.user = userData;
 		if (persist) {
@@ -184,19 +184,19 @@ export default class Auth {
 		}
 	}
 
-  /**
-   * Sign out the currently signed-in user.
-   * Removes all data stored in the storage that's associated with the user.
-   */
+	/**
+	 * Sign out the currently signed-in user.
+	 * Removes all data stored in the storage that's associated with the user.
+	 */
 	signOut() {
 		return this.setState(null);
 	}
 
-  /**
-   * Refreshes the idToken by using the locally stored refresh token
-   * only if the idToken has expired.
-   * @private
-   */
+	/**
+	 * Refreshes the idToken by using the locally stored refresh token
+	 * only if the idToken has expired.
+	 * @private
+	 */
 	async refreshIdToken() {
 		// If the idToken didn't expire, return.
 		if (Date.now() < this.user.tokenManager.expiresAt) {
@@ -229,12 +229,12 @@ export default class Auth {
 		}
 	}
 
-  /**
-   * Uses native fetch, but adds authorization headers, otherwise,
+	/**
+	 * Uses native fetch, but adds authorization headers, otherwise,
 	 * the API is exactly the same as native fetch.
-   * @param {Request|Object|string} resource A request to send. It can be a resource or an options object.
-   * @param {Object} init An options object.
-   */
+	 * @param {Request|Object|string} resource A request to send. It can be a resource or an options object.
+	 * @param {Object} init An options object.
+	 */
 	async authorizedRequest(resource, init) {
 		const request =
 			resource instanceof Request
@@ -252,10 +252,10 @@ export default class Auth {
 		return fetch(request);
 	}
 
-  /**
-   * Signs in or signs up a user by exchanging a custom authentication token.
-   * @param {string} token The custom token.
-   */
+	/**
+	 * Signs in or signs up a user by exchanging a custom authentication token.
+	 * @param {string} token The custom token.
+	 */
 	async signInWithCustomToken(token) {
 		// Try to exchange the Auth Code for an idToken and refreshToken.
 		// And then get the user profile.
@@ -267,11 +267,11 @@ export default class Auth {
 		);
 	}
 
-  /**
-   * Starts the auth flow of a federated ID provider.
-   * Also, it will redirect the page to the federated sign-in page.
-   * @param {oauthFlowOptions|string} options An options object or a string with the name of the provider.
-   */
+	/**
+	 * Starts the auth flow of a federated ID provider.
+	 * Also, it will redirect the page to the federated sign-in page.
+	 * @param {oauthFlowOptions|string} options An options object or a string with the name of the provider.
+	 */
 	async signInWithProvider(options) {
 		if (!this.redirectUri) {
 			throw Error(
@@ -314,12 +314,12 @@ export default class Auth {
 		location.assign(authUri);
 	}
 
-  /**
-   * Signs in or signs up a user using credentials from an Identity Provider (IdP) after a redirect.
-   * It will fail silently if the URL doesn't have a "code" search param.
-   * @param {string} [requestUri] The request URI with the authorization code, state, etc. from the IdP.
-   * @private
-   */
+	/**
+	 * Signs in or signs up a user using credentials from an Identity Provider (IdP) after a redirect.
+	 * It will fail silently if the URL doesn't have a "code" search param.
+	 * @param {string} [requestUri] The request URI with the authorization code, state, etc. from the IdP.
+	 * @private
+	 */
 	async finishProviderSignIn(requestUri = location.href) {
 		// Get the sessionId we received before the redirect from storage.
 		const sessionId = await this.storage.get(this.sKey("SessionId"));
@@ -357,10 +357,10 @@ export default class Auth {
 		}
 	}
 
-  /**
-   * Handles all sign-in flows that complete via redirects.
-   * Fails silently if no redirect was detected.
-   */
+	/**
+	 * Handles all sign-in flows that complete via redirects.
+	 * Fails silently if no redirect was detected.
+	 */
 	async handleSignInRedirect() {
 		// OAuth Federated Identity Provider flow.
 		if (location.href.match(/[&?]code=/)) {
@@ -382,12 +382,12 @@ export default class Auth {
 		}
 	}
 
-  /**
-   * Signs up with email and password or anonymously when no arguments are passed.
-   * Automatically signs the user in on completion.
-   * @param {string} [email] An email for the user to pass.
-   * @param {string} [password] A password for the user to pass.
-   */
+	/**
+	 * Signs up with email and password or anonymously when no arguments are passed.
+	 * Automatically signs the user in on completion.
+	 * @param {string} [email] An email for the user to pass.
+	 * @param {string} [password] A password for the user to pass.
+	 */
 	async signUp(email, password) {
 		// Sign up and then retrieve the user profile and persist it in the session.
 		return await this.fetchProfile(
@@ -399,11 +399,11 @@ export default class Auth {
 		);
 	}
 
-  /**
-   * Signs in a user with email and password.
-   * @param {string} email
-   * @param {string} password
-   */
+	/**
+	 * Signs in a user with email and password.
+	 * @param {string} email
+	 * @param {string} password
+	 */
 	async signIn(email, password) {
 		// Sign in and then retrieve the user profile and persist it in the session.
 		return await this.fetchProfile(
@@ -415,14 +415,14 @@ export default class Auth {
 		);
 	}
 
-  /**
-   * Sends an out-of-band confirmation code for an account.
+	/**
+	 * Sends an out-of-band confirmation code for an account.
 	 * It can be used to reset a password, to verify an email address and send a sign-in email link.
 	 * The email argument is not needed if verifying an email (the argument is ignored). Otherwise, it is required.
-   * @param {'PASSWORD_RESET'|'VERIFY_EMAIL'|'EMAIL_SIGNIN'} requestType The type of out-of-band (OOB) code to send.
-   * @param {string} [email] When the `requestType` is `PASSWORD_RESET` or `EMAIL_SIGNIN` you need to provide an email address.
-   * @returns {Promise}
-   */
+	 * @param {'PASSWORD_RESET'|'VERIFY_EMAIL'|'EMAIL_SIGNIN'} requestType The type of out-of-band (OOB) code to send.
+	 * @param {string} [email] When the `requestType` is `PASSWORD_RESET` or `EMAIL_SIGNIN` you need to provide an email address.
+	 * @returns {Promise}
+	 */
 	async sendOobCode(requestType, email) {
 		const verifyEmail = requestType === "VERIFY_EMAIL";
 		if (verifyEmail) {
@@ -438,23 +438,23 @@ export default class Auth {
 		});
 	}
 
-  /**
-   * Resets the password by using a reset code.
-   * It can also be used to verify oobCode by not passing a password.
-   * @param {string} code
-   * @returns {string} The email of the account to which the code was issued.
-   */
+	/**
+	 * Resets the password by using a reset code.
+	 * It can also be used to verify oobCode by not passing a password.
+	 * @param {string} code
+	 * @returns {string} The email of the account to which the code was issued.
+	 */
 	async resetPassword(oobCode, newPassword) {
 		const { email } = await this.api("resetPassword", { oobCode, newPassword });
 
 		return email;
 	}
 
-  /**
-   * Returns info about all providers associated with a specified email.
-   * @param {string} email The user's email address.
-   * @returns {ProvidersForEmailResponse}
-   */
+	/**
+	 * Returns info about all providers associated with a specified email.
+	 * @param {string} email The user's email address.
+	 * @returns {ProvidersForEmailResponse}
+	 */
 	async fetchProvidersForEmail(email) {
 		const response = await this.api("createAuthUri", {
 			identifier: email,
@@ -464,11 +464,11 @@ export default class Auth {
 		return response;
 	}
 
-  /**
-   * Gets the user data from the server, and updates the local caches.
-   * @param {Object} [tokenManager] Only when not signed-in.
-   * @throws Will throw if the user is not signed-in.
-   */
+	/**
+	 * Gets the user data from the server, and updates the local caches.
+	 * @param {Object} [tokenManager] Only when not signed-in.
+	 * @throws Will throw if the user is not signed-in.
+	 */
 	async fetchProfile(tokenManager = this.user && this.user.tokenManager) {
 		if (!tokenManager) {
 			await this.enforceAuth();
@@ -485,11 +485,11 @@ export default class Auth {
 		await this.setState(userData);
 	}
 
-  /**
-   * Updates the user's profile.
-   * @param {Object} newData An object with the new data.
-   * @throws Will throw if the user is not signed-in.
-   */
+	/**
+	 * Updates the user's profile.
+	 * @param {Object} newData An object with the new data.
+	 * @throws Will throw if the user is not signed-in.
+	 */
 	async updateProfile(newData) {
 		await this.enforceAuth();
 
@@ -515,10 +515,10 @@ export default class Auth {
 		await this.setState(updatedData);
 	}
 
-  /**
-   * Deletes the currently signed-in account then sign out.
-   * @throws Will throw if the user is not signed-in.
-   */
+	/**
+	 * Deletes the currently signed-in account then sign out.
+	 * @throws Will throw if the user is not signed-in.
+	 */
 	async deleteAccount() {
 		await this.enforceAuth();
 		await this.api(
