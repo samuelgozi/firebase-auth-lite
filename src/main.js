@@ -140,7 +140,7 @@ export default class Auth {
 		// Sometimes the error codes are joined with an explanation, and we don't need that (it's a bug).
 		// So we remove the unnecessary part.
 		if (!response.ok) {
-			const code = data.error.message.replace(/: [\w ,.''()]+$/, '');
+			const code = data.error.message.replace(/: [\w ,.'"()]+$/, '');
 			throw Error(code);
 		}
 
