@@ -3,7 +3,7 @@
  * https://cloud.google.com/identity-platform/docs/reference/rest/v1/accounts
  */
 
-import { localStorageAdapter } from "./storage.js";
+import { localStorageAdapter } from './storage.js';
 
 /**
  * Sets object for an IDP (Identity Provider).
@@ -40,7 +40,7 @@ export default class Auth {
 	constructor({
 		apiKey,
 		redirectUri,
-		name = "default",
+		name = 'default',
 		storage = localStorageAdapter,
 	} = {}) {
 		if (!apiKey) {
@@ -54,15 +54,15 @@ export default class Auth {
 				listeners: [],
 			});
 
-			this.storage.get(this.sKey("User")).then(user => {
+			this.storage.get(this.sKey('User')).then(user => {
 				this.setState(JSON.parse(user), false);
 				if (this.user) {
 					this.refreshIdToken()
 						.then(() => this.fetchProfile())
 						.catch(error => {
 							switch (error.message) {
-								case "TOKEN_EXPIRED":
-								case "INVALID_ID_TOKEN":
+								case 'TOKEN_EXPIRED':
+								case 'INVALID_ID_TOKEN':
 									return this.signOut();
 								default:
 									throw error;
@@ -73,11 +73,11 @@ export default class Auth {
 
 			// Because this library is also used in React Native, outside the browser as well,
 			// we need to check if this environment supports `addEventListener` on the window.
-			if ("addEventListener" in window) {
-				window.addEventListener("storage", event => {
+			if ('addEventListener' in window) {
+				window.addEventListener('storage', event => {
 					// This code runs if localStorage for this user
 					// data is updated from a different browser window.
-					if (event.key !== this.sKey("User")) {
+					if (event.key !== this.sKey('User')) {
 						return;
 					} else {
 						this.setState(JSON.parse(event.newValue), false);
@@ -127,26 +127,26 @@ export default class Auth {
 	 */
 	async api(endpoint, body) {
 		const url =
-			endpoint === "token"
+			endpoint === 'token'
 				? `https://securetoken.googleapis.com/v1/token?key=${this.apiKey}`
 				: `https://identitytoolkit.googleapis.com/v1/accounts:${endpoint}?key=${this.apiKey}`;
 
 		const response = await fetch(url, {
-			method: "POST",
-			body: typeof body === "string" ? body : JSON.stringify(body),
+			method: 'POST',
+			body: typeof body === 'string' ? body : JSON.stringify(body),
 		});
 		let data = await response.json();
 		// If the response returned an error, try to get a Firebase error code/message.
 		// Sometimes the error codes are joined with an explanation, and we don't need that (it's a bug).
 		// So we remove the unnecessary part.
 		if (!response.ok) {
-			const code = data.error.message.replace(/: [\w ,.'"()]+$/, "");
+			const code = data.error.message.replace(/: [\w ,.''()]+$/, '');
 			throw Error(code);
 		}
 
 		// Calculate the expiration date for tokens.
-		Object.defineProperty(data, "expiresAt", {
-			value: Date.parse(response.headers.get("date")) + 3600 * 1000,
+		Object.defineProperty(data, 'expiresAt', {
+			value: Date.parse(response.headers.get('date')) + 3600 * 1000,
 		});
 
 		return data;
@@ -161,7 +161,7 @@ export default class Auth {
 		if (this.user) {
 			return this.refreshIdToken(); // Won't do anything if the token is valid.
 		} else {
-			throw Error("The user must be signed-in to use this method.");
+			throw Error('The user must be signed-in to use this method.');
 		}
 	}
 
@@ -174,8 +174,8 @@ export default class Auth {
 	async setState(userData, persist = true, emit = true) {
 		this.user = userData;
 		if (persist) {
-			await this.storage[userData ? "set" : "remove"](
-				this.sKey("User"),
+			await this.storage[userData ? 'set' : 'remove'](
+				this.sKey('User'),
 				JSON.stringify(userData)
 			);
 		}
@@ -211,8 +211,8 @@ export default class Auth {
 			try {
 				// Save the promise when this function is called,
 				// else we don't make more than one request.
-				this._ref = this.api("token", {
-					grant_type: "refresh_token",
+				this._ref = this.api('token', {
+					grant_type: 'refresh_token',
 					refresh_token: this.user.tokenManager.refreshToken,
 				}).then(data => {
 					const tokenManager = {
@@ -244,7 +244,7 @@ export default class Auth {
 		if (this.user) {
 			await this.refreshIdToken(); // Won't do anything if the token didn't expire yet.
 			request.headers.set(
-				"Authorization",
+				'Authorization',
 				`Bearer ${this.user.tokenManager.idToken}`
 			);
 		}
@@ -260,7 +260,7 @@ export default class Auth {
 		// Try to exchange the Auth Code for an idToken and refreshToken.
 		// And then get the user profile.
 		return await this.fetchProfile(
-			await this.api("signInWithCustomToken", {
+			await this.api('signInWithCustomToken', {
 				token,
 				returnSecureToken: true,
 			})
@@ -282,19 +282,19 @@ export default class Auth {
 		// The options can be a string or an object,
 		// so here we make sure we extract the correct data in each case.
 		const { provider, oauthScope, context, linkAccount } =
-			typeof options === "string"
+			typeof options === 'string'
 				? { provider: options }
 				: options;
 
-		// Make sure the user is signed-in when an "account link" was requested.
+		// Make sure the user is signed-in when an 'account link' was requested.
 		if (linkAccount) {
 			await this.enforceAuth();
 		}
 
 		// Get the URL and other data necessary for authentication.
-		const { authUri, sessionId } = await this.api("createAuthUri", {
+		const { authUri, sessionId } = await this.api('createAuthUri', {
 			continueUri: this.redirectUri,
-			authFlowType: "CODE_FLOW",
+			authFlowType: 'CODE_FLOW',
 			providerId: provider,
 			oauthScope,
 			context,
@@ -303,11 +303,11 @@ export default class Auth {
 		// Save the sessionId that we just received in localStorage.
 		// It's required to finish the auth flow because I believe
 		// this is used to mitigate CSRF attacks (no docs on this...).
-		await this.storage.set(this.sKey("SessionId"), sessionId);
+		await this.storage.set(this.sKey('SessionId'), sessionId);
 
-		// Save if this is a fresh sign-in or a "link account" request.
+		// Save if this is a fresh sign-in or a 'link account' request.
 		if (linkAccount) {
-			await this.storage.set(this.sKey("LinkAccount"), true);
+			await this.storage.set(this.sKey('LinkAccount'), true);
 		}
 
 		// Finally, redirect the page to the auth endpoint.
@@ -316,15 +316,15 @@ export default class Auth {
 
 	/**
 	 * Signs in or signs up a user using credentials from an Identity Provider (IdP) after a redirect.
-	 * It will fail silently if the URL doesn't have a "code" search param.
+	 * It will fail silently if the URL doesn't have a 'code' search param.
 	 * @param {string} [requestUri] The request URI with the authorization code, state, etc. from the IdP.
 	 * @private
 	 */
 	async finishProviderSignIn(requestUri = location.href) {
 		// Get the sessionId we received before the redirect from storage.
-		const sessionId = await this.storage.get(this.sKey("SessionId"));
-		// Get the indication if this was a "link account" request.
-		const linkAccount = await this.storage.get(this.sKey("LinkAccount"));
+		const sessionId = await this.storage.get(this.sKey('SessionId'));
+		// Get the indication if this was a 'link account' request.
+		const linkAccount = await this.storage.get(this.sKey('LinkAccount'));
 
 		// Check for the edge case in which the user signed-out
 		// before completing the linkAccount request.
@@ -333,13 +333,13 @@ export default class Auth {
 				'Request to "Link account" was made, but user is no longer signed-in'
 			);
 		} else {
-			await this.storage.remove(this.sKey("LinkAccount"));
+			await this.storage.remove(this.sKey('LinkAccount'));
 
 			// Try to exchange the Auth Code for an idToken and refreshToken.
 			const { idToken, refreshToken, expiresAt, context } = await this.api(
-				"signInWithIdp",
+				'signInWithIdp',
 				{
-					// If this is a "link account" flow, then attach the idToken of the currently signed-in account.
+					// If this is a 'link account' flow, then attach the idToken of the currently signed-in account.
 					idToken: linkAccount ? this.user.tokenManager.idToken : undefined,
 					requestUri,
 					sessionId,
@@ -371,7 +371,7 @@ export default class Auth {
 			const oobCode = location.href.match(/[?&]oobCode=([^&]+)/)[1];
 			const email = location.href.match(/[?&]email=([^&]+)/)[1];
 			const expiresAt = Date.now() + 3600 * 1000;
-			const { idToken, refreshToken } = await this.api("signInWithEmailLink", {
+			const { idToken, refreshToken } = await this.api('signInWithEmailLink', {
 				oobCode,
 				email,
 			});
@@ -391,7 +391,7 @@ export default class Auth {
 	async signUp(email, password) {
 		// Sign up and then retrieve the user profile and persist it in the session.
 		return await this.fetchProfile(
-			await this.api("signUp", {
+			await this.api('signUp', {
 				email,
 				password,
 				returnSecureToken: true,
@@ -407,7 +407,7 @@ export default class Auth {
 	async signIn(email, password) {
 		// Sign in and then retrieve the user profile and persist it in the session.
 		return await this.fetchProfile(
-			await this.api("signInWithPassword", {
+			await this.api('signInWithPassword', {
 				email,
 				password,
 				returnSecureToken: true,
@@ -424,13 +424,13 @@ export default class Auth {
 	 * @returns {Promise}
 	 */
 	async sendOobCode(requestType, email) {
-		const verifyEmail = requestType === "VERIFY_EMAIL";
+		const verifyEmail = requestType === 'VERIFY_EMAIL';
 		if (verifyEmail) {
 			await this.enforceAuth();
 			email = this.user.email;
 		}
 
-		return void this.api("sendOobCode", {
+		return void this.api('sendOobCode', {
 			idToken: verifyEmail ? this.user.tokenManager.idToken : undefined,
 			requestType,
 			email,
@@ -445,7 +445,7 @@ export default class Auth {
 	 * @returns {string} The email of the account to which the code was issued.
 	 */
 	async resetPassword(oobCode, newPassword) {
-		const { email } = await this.api("resetPassword", { oobCode, newPassword });
+		const { email } = await this.api('resetPassword', { oobCode, newPassword });
 
 		return email;
 	}
@@ -456,7 +456,7 @@ export default class Auth {
 	 * @returns {ProvidersForEmailResponse}
 	 */
 	async fetchProvidersForEmail(email) {
-		const response = await this.api("createAuthUri", {
+		const response = await this.api('createAuthUri', {
 			identifier: email,
 			continueUri: location.href,
 		});
@@ -474,7 +474,7 @@ export default class Auth {
 			await this.enforceAuth();
 		}
 
-		const lookupResponse = await this.api("lookup", {
+		const lookupResponse = await this.api('lookup', {
 			idToken: tokenManager.idToken,
 		});
 
@@ -494,7 +494,7 @@ export default class Auth {
 		await this.enforceAuth();
 
 		// Calculate the expiration date for the idToken.
-		const updatedData = await this.api("update", {
+		const updatedData = await this.api('update', {
 			...newData,
 			idToken: this.user.tokenManager.idToken,
 			returnSecureToken: true,
@@ -522,7 +522,7 @@ export default class Auth {
 	async deleteAccount() {
 		await this.enforceAuth();
 		await this.api(
-			"delete",
+			'delete',
 			JSON.stringify({ idToken: this.user.tokenManager.idToken })
 		);
 		this.signOut();
