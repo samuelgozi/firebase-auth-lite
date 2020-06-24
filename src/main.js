@@ -40,12 +40,7 @@ const storageApi = {};
  * @param {Array.<ProviderOptions|string>} options.providers Array of arguments that will be passed to the addProvider method.
  */
 export default class Auth {
-	constructor({
-		apiKey,
-		redirectUri,
-		name = 'default',
-		storage = storageApi
-	} = {}) {
+	constructor({ apiKey, redirectUri, name = 'default', storage = storageApi } = {}) {
 		if (!apiKey) throw Error('The argument "apiKey" is required');
 
 		Object.assign(this, {
@@ -58,24 +53,23 @@ export default class Auth {
 
 		this.storage.get(this.sKey('User')).then(user => {
 			this.setState(JSON.parse(user), false);
-			if (this.user) {
+			if (this.user)
 				this.refreshIdToken()
 					.then(() => this.fetchProfile())
-					.catch(error => {
-						if (error.message === 'TOKEN_EXPIRED' || error.message === 'INVALID_ID_TOKEN') return this.signOut();
-						throw error;
+					.catch(e => {
+						if (e.message === 'TOKEN_EXPIRED' || e.message === 'INVALID_ID_TOKEN') return this.signOut();
+						throw e;
 					});
-			}
 		});
 
 		// Because this library is also used in React Native, outside the browser as well,
 		// we need to check if this environment supports `addEventListener` on the window.
 		'addEventListener' in window &&
-			window.addEventListener('storage', event => {
-				// This code runs if localStorage for this user
-				// data is updated from a different browser window.
-				if (event.key !== this.sKey('User')) return;
-				this.setState(JSON.parse(event.newValue), false);
+			window.addEventListener('storage', e => {
+				// This code will run if localStorage for this user
+				// data was updated from a different browser window.
+				if (e.key !== this.sKey('User')) return;
+				this.setState(JSON.parse(e.newValue), false);
 			});
 	}
 
@@ -86,7 +80,7 @@ export default class Auth {
 	 * @private
 	 */
 	emit() {
-		this.listeners.forEach(callback => callback(this.user));
+		this.listeners.forEach(cb => cb(this.user));
 	}
 
 	/**
@@ -94,11 +88,11 @@ export default class Auth {
 	 * @param {function} callback Function to call when the event is triggered.
 	 * @returns {function} The function that unsubscribes your callback after being called.
 	 */
-	listen(callback) {
-		this.listeners.push(callback);
+	listen(cb) {
+		this.listeners.push(cb);
 
 		// Return a function to unbind the callback.
-		return () => this.listeners = this.listeners.filter(filter => filter !== callback);
+		return () => (this.listeners = this.listeners.filter(fn => fn !== cb));
 	}
 
 	/**
@@ -115,30 +109,31 @@ export default class Auth {
 	 * @param {any} request Body to pass to the request.
 	 * @private
 	 */
-	async api(endpoint, body) {
+	api(endpoint, body) {
 		const url =
 			endpoint === 'token'
 				? `https://securetoken.googleapis.com/v1/token?key=${this.apiKey}`
 				: `https://identitytoolkit.googleapis.com/v1/accounts:${endpoint}?key=${this.apiKey}`;
 
-		const response = await fetch(url, {
+		return fetch(url, {
 			method: 'POST',
 			body: typeof body === 'string' ? body : JSON.stringify(body)
+		}).then(async response => {
+			let data = await response.json();
+
+			// If the response returned an error, try to get a Firebase error code/message.
+			// Sometimes the error codes are joined with an explanation, we don't need that(its a bug).
+			// So we remove the unnecessary part.
+			if (!response.ok) {
+				const code = data.error.message.replace(/: [\w ,.'"()]+$/, '');
+				throw Error(code);
+			}
+
+			// Add a hidden date property to the returned object.
+			// Used mostly to calculate the expiration date for tokens.
+			Object.defineProperty(data, 'expiresAt', { value: Date.parse(response.headers.get('date')) + 3600 * 1000 });
+			return data;
 		});
-		let data = await response.json();
-
-		// If the response returned an error, try to get a Firebase error code/message.
-		// Sometimes the error codes are joined with an explanation, we don't need that(its a bug).
-		// So we remove the unnecessary part.
-		if (!response.ok) {
-			const code = data.error.message.replace(/: [\w ,.'"()]+$/, '');
-			throw Error(code);
-		}
-
-		// Calculate the expiration date for tokens.
-		Object.defineProperty(data, 'expiresAt', { value: Date.parse(response.headers.get('date')) + 3600 * 1000 });
-
-		return data;
 	}
 
 	/**
@@ -159,7 +154,7 @@ export default class Auth {
 	 */
 	async setState(userData, persist = true, emit = true) {
 		this.user = userData;
-		persist && await this.storage[userData ? 'set' : 'remove'](this.sKey('User'), JSON.stringify(userData));
+		persist && (await this.storage[userData ? 'set' : 'remove'](this.sKey('User'), JSON.stringify(userData)));
 		emit && this.emit();
 	}
 
@@ -180,7 +175,7 @@ export default class Auth {
 		if (Date.now() < this.user.tokenManager.expiresAt) return;
 
 		// If the request for a new token was already made, then wait for it and return.
-		if (this._ref) return void await this._ref;
+		if (this._ref) return void (await this._ref);
 
 		// If the idToken is expired or the request for a new token was made, then refresh.
 		try {
@@ -209,10 +204,7 @@ export default class Auth {
 	 * @param {Object} init An options object.
 	 */
 	async authorizedRequest(resource, init) {
-		const request =
-			resource instanceof Request
-				? resource
-				: new Request(resource, init);
+		const request = resource instanceof Request ? resource : new Request(resource, init);
 
 		if (this.user) {
 			await this.refreshIdToken(); // Won't do anything if the token didn't expire yet.
@@ -246,17 +238,14 @@ export default class Auth {
 		if (!this.redirectUri)
 			throw Error('In order to use an Identity provider, you should initiate the "Auth" instance with a "redirectUri".');
 
-		// The options can be a string or an object,
-		// so here we make sure we extract the correct data in each case.
+		// The options can be a string, or an object, so here we make sure we extract the right data in each case.
 		const { provider, oauthScope, context, linkAccount } =
-			typeof options === 'string'
-				? { provider: options }
-				: options;
+			typeof options === 'string' ? { provider: options } : options;
 
-		// Make sure the user is signed-in when an "account link" was requested.
-		linkAccount && await this.enforceAuth();
+		// Make sure the user is logged in when an "account link" was requested.
+		linkAccount && (await this.enforceAuth());
 
-		// Get the URL and other data necessary for authentication.
+		// Get the url and other data necessary for the authentication.
 		const { authUri, sessionId } = await this.api('createAuthUri', {
 			continueUri: this.redirectUri,
 			authFlowType: 'CODE_FLOW',
@@ -265,15 +254,14 @@ export default class Auth {
 			context
 		});
 
-		// Save the sessionId that we just received in localStorage.
-		// It's required to finish the auth flow because I believe
-		// this is used to mitigate CSRF attacks (no docs on this...).
+		// Save the sessionId that we just received in the local storage.
+		// Is required to finish the auth flow, I believe this is used to mitigate CSRF attacks.
+		// (No docs on this...)
 		await this.storage.set(this.sKey('SessionId'), sessionId);
+		// Save if this is a fresh log-in or a "link account" request.
+		linkAccount && (await this.storage.set(this.sKey('LinkAccount'), true));
 
-		// Save if this is a fresh sign-in or a "link account" request.
-		linkAccount && await this.storage.set(this.sKey('LinkAccount'), true);
-
-		// Finally, redirect the page to the auth endpoint.
+		// Finally - redirect the page to the auth endpoint.
 		location.assign(authUri);
 	}
 
@@ -373,7 +361,7 @@ export default class Auth {
 	 * Sends an out-of-band confirmation code for an account.
 	 * It can be used to reset a password, to verify an email address and send a sign-in email link.
 	 * The email argument is not needed if verifying an email (the argument is ignored). Otherwise, it is required.
-	 * @param {"PASSWORD_RESET"|"VERIFY_EMAIL"|"EMAIL_SIGNIN"} requestType The type of out-of-band (OOB) code to send.
+	 * @param {'PASSWORD_RESET'|'VERIFY_EMAIL'|'EMAIL_SIGNIN'} requestType The type of out-of-band (OOB) code to send.
 	 * @param {string} [email] When the `requestType` is `PASSWORD_RESET` or `EMAIL_SIGNIN` you need to provide an email address.
 	 * @returns {Promise}
 	 */
