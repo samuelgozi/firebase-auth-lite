@@ -154,7 +154,7 @@ export default class Auth {
 	 */
 	async setState(userData, persist = true, emit = true) {
 		this.user = userData;
-		persist && (await this.storage[userData ? 'set' : 'remove'](this.sKey('User'), JSON.stringify(userData)));
+		persist && await this.storage[userData ? 'set' : 'remove'](this.sKey('User'), JSON.stringify(userData));
 		emit && this.emit();
 	}
 
@@ -175,7 +175,7 @@ export default class Auth {
 		if (Date.now() < this.user.tokenManager.expiresAt) return;
 
 		// If the request for a new token was already made, then wait for it and return.
-		if (this._ref) return void (await this._ref);
+		if (this._ref) return void await this._ref;
 
 		// If the idToken is expired or the request for a new token was made, then refresh.
 		try {
@@ -243,7 +243,7 @@ export default class Auth {
 			typeof options === 'string' ? { provider: options } : options;
 
 		// Make sure the user is logged in when an "account link" was requested.
-		linkAccount && (await this.enforceAuth());
+		linkAccount && await this.enforceAuth();
 
 		// Get the url and other data necessary for the authentication.
 		const { authUri, sessionId } = await this.api('createAuthUri', {
@@ -259,7 +259,7 @@ export default class Auth {
 		// (No docs on this...)
 		await this.storage.set(this.sKey('SessionId'), sessionId);
 		// Save if this is a fresh log-in or a "link account" request.
-		linkAccount && (await this.storage.set(this.sKey('LinkAccount'), true));
+		linkAccount && await this.storage.set(this.sKey('LinkAccount'), true);
 
 		// Finally - redirect the page to the auth endpoint.
 		location.assign(authUri);
@@ -387,9 +387,7 @@ export default class Auth {
 	 * @returns {string} The email of the account to which the code was issued.
 	 */
 	async resetPassword(oobCode, newPassword) {
-		const { email } = await this.api('resetPassword', { oobCode, newPassword });
-
-		return email;
+		return (await this.api('resetPassword', { oobCode, newPassword })).email;
 	}
 
 	/**
