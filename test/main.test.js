@@ -248,7 +248,7 @@ describe('Auth', () => {
 			test('Triggers change event', () => {
 				const auth = new Auth({ apiKey: 'key' });
 				const mockEvent = new Event('storage');
-				const listener = jest.fn(() => { });
+				const listener = jest.fn(() => {});
 
 				auth.listen(listener);
 
@@ -264,7 +264,7 @@ describe('Auth', () => {
 			test('Nothing happens when an unrelated storage event is triggered', () => {
 				const auth = new Auth({ apiKey: 'key' });
 				const mockEvent = new Event('storage');
-				const listener = jest.fn(() => { });
+				const listener = jest.fn(() => {});
 
 				auth.listen(listener);
 
@@ -283,9 +283,9 @@ describe('Auth', () => {
 		test('All listeners are called', () => {
 			const auth = new Auth({ apiKey: 'key' });
 
-			const listener1 = jest.fn(() => { });
-			const listener2 = jest.fn(() => { });
-			const listener3 = jest.fn(() => { });
+			const listener1 = jest.fn(() => {});
+			const listener2 = jest.fn(() => {});
+			const listener3 = jest.fn(() => {});
 
 			auth.listen(listener1);
 			auth.listen(listener2);
@@ -304,9 +304,9 @@ describe('Auth', () => {
 		test('listen() returns a function to remove the listener', () => {
 			const auth = new Auth({ apiKey: 'key' });
 
-			const listener1 = jest.fn(() => { });
-			const listener2 = jest.fn(() => { });
-			const listener3 = jest.fn(() => { });
+			const listener1 = jest.fn(() => {});
+			const listener2 = jest.fn(() => {});
+			const listener3 = jest.fn(() => {});
 
 			const unlisten = auth.listen(listener1);
 			auth.listen(listener2);
@@ -388,7 +388,7 @@ describe('Auth', () => {
 			try {
 				const auth = new Auth({ apiKey: 'key' });
 				await auth.enforceAuth();
-			} catch { }
+			} catch {}
 
 			expect(fetch.mock.calls.length).toEqual(0);
 		});
@@ -422,7 +422,7 @@ describe('Auth', () => {
 		test('Fires an event', async () => {
 			const auth = new Auth({ apiKey: 'key' });
 
-			const callback = jest.fn(() => { });
+			const callback = jest.fn(() => {});
 			auth.listen(callback);
 
 			await auth.setState();
@@ -456,7 +456,7 @@ describe('Auth', () => {
 		test('Fires an event', async () => {
 			const auth = new Auth({ apiKey: 'key' });
 
-			const callback = jest.fn(() => { });
+			const callback = jest.fn(() => {});
 			auth.listen(callback);
 
 			await auth.signOut();
@@ -568,7 +568,7 @@ describe('Auth', () => {
 				}
 			};
 
-			const listener = jest.fn(() => { });
+			const listener = jest.fn(() => {});
 			auth.listen(listener);
 			await auth.refreshIdToken();
 
