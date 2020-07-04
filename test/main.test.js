@@ -114,7 +114,7 @@ describe('Auth', () => {
 						email: 'test@example.com',
 						tokenManager: {
 							idToken: 'idTokenString',
-							expiresAt: Date.now() - 3600 * 1000 // one hour ago.
+							expiresAt: Date.now() - 3600 * 1000 // One hour ago.
 						}
 					})
 				);
@@ -122,7 +122,7 @@ describe('Auth', () => {
 				const auth = new Auth({ apiKey: 'key' });
 
 				// Await for the second update to happen.
-				// the first one is from local storage.
+				// The first one is from local storage.
 				await new Promise(resolve => {
 					auth.listen(resolve);
 				});
@@ -382,7 +382,7 @@ describe('Auth', () => {
 
 		test("Doesn't make any requests when the user is not logged in", async () => {
 			// The constructor makes some requests.
-			// We have to mock them for this not to throw
+			// We must mock them, to prevent a throw
 			fetch.mockResponse('{}');
 
 			try {
