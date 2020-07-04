@@ -4,7 +4,7 @@
  */
 
 /**
- * Settings object for an IdP (Identity Provider).
+ * Settings object for an IDP (Identity Provider).
  * @typedef {Object} ProviderOptions
  * @property {string} options.name Name of the provider in lowercase.
  * @property {string} [options.scope] Scopes for the IdP, this is optional and defaults to "OpenID email".
@@ -74,9 +74,9 @@ export default class Auth {
 	}
 
 	/**
-	 * Emits an event and triggers all of the listeners.
-	 * @param {string} name Name of the event to trigger.
-	 * @param {any} data Data you want to pass to the event listeners.
+	 * Emits an event and triggers all the listeners.
+	 * @param {string} name The name of the event to trigger.
+	 * @param {any} data The data you want to pass to the event listeners.
 	 * @private
 	 */
 	emit() {
@@ -84,9 +84,9 @@ export default class Auth {
 	}
 
 	/**
-	 * Sets up a function that will be called whenever the user state is changed.
-	 * @param {function} callback Function to call when the event is triggered.
-	 * @returns {function} The function that unsubscribes your callback after being called.
+	 * Set up a function that will be called whenever the user state is changed.
+	 * @param {function} cb The function to call when the event is triggered.
+	 * @returns {function} Function that will unsubscribe your callback from being called.
 	 */
 	listen(cb) {
 		this.listeners.push(cb);
@@ -104,8 +104,8 @@ export default class Auth {
 	}
 
 	/**
-	 * Makes a post request to a specific endpoint and returns the response.
-	 * @param {string} endpoint Name of the endpoint.
+	 * Make post request to a specific endpoint and return the response.
+	 * @param {string} endpoint The name of the endpoint.
 	 * @param {any} request Body to pass to the request.
 	 * @private
 	 */
@@ -122,7 +122,7 @@ export default class Auth {
 			let data = await response.json();
 
 			// If the response returned an error, try to get a Firebase error code/message.
-			// Sometimes the error codes are joined with an explanation, we don't need that(its a bug).
+			// Sometimes the error codes are joined with an explanation, we don't need that (its a bug).
 			// So we remove the unnecessary part.
 			if (!response.ok) {
 				const code = data.error.message.replace(/: [\w ,.'"()]+$/, '');
@@ -132,13 +132,16 @@ export default class Auth {
 			// Add a hidden date property to the returned object.
 			// Used mostly to calculate the expiration date for tokens.
 			Object.defineProperty(data, 'expiresAt', { value: Date.parse(response.headers.get('date')) + 3600 * 1000 });
+
+			// Remove unnecessary property
+			delete updatedData.kind;
 			return data;
 		});
 	}
 
 	/**
-	 * Makes sure the user is signed-in and has up-to-date credentials.
-	 * @throws Will throw if the user is not signed-in.
+	 * Makes sure the user is logged in and has up-to-date credentials.
+	 * @throws Will throw if the user is not signed in.
 	 * @private
 	 */
 	async enforceAuth() {
@@ -147,9 +150,9 @@ export default class Auth {
 	}
 
 	/**
-	 * Updates the user data in localStorage.
-	 * @param {Object} userData New user data.
-	 * @param {boolean} [updateStorage = true] Check whether to update localStorage or not.
+	 * Updates the user data in the localStorage.
+	 * @param {Object} userData The new user data.
+	 * @param {boolean} [updateStorage = true] Whether to update local storage or not.
 	 * @private
 	 */
 	async setState(userData, persist = true, emit = true) {
@@ -199,8 +202,8 @@ export default class Auth {
 	}
 
 	/**
-	 * Uses native fetch, but adds authorization headers, otherwise, the API is exactly the same as native fetch.
-	 * @param {Request|Object|string} resource A request to send. It can be a resource or an options object.
+	 * Uses native fetch but adds authorization headers, otherwise the API is exactly the same as native fetch.
+	 * @param {Request|Object|string} resource The resource to send the request to, or an options object.
 	 * @param {Object} init An options object.
 	 */
 	async authorizedRequest(resource, init) {
@@ -361,8 +364,8 @@ export default class Auth {
 
 	/**
 	 * Sends an out-of-band confirmation code for an account.
-	 * It can be used to reset a password, to verify an email address and send a sign-in email link.
-	 * The email argument is not needed if verifying an email (the argument is ignored). Otherwise, it is required.
+	 * Can be used to reset a password, to verify an email address and send a Sign-in email link.
+	 * The `email` argument is not needed only when verifying an email (In that case it will be completely ignored, even if specified), otherwise it is required.
 	 * @param {'PASSWORD_RESET'|'VERIFY_EMAIL'|'EMAIL_SIGNIN'} requestType The type of out-of-band (OOB) code to send.
 	 * @param {string} [email] When the `requestType` is `PASSWORD_RESET` or `EMAIL_SIGNIN` you need to provide an email address.
 	 * @returns {Promise}
@@ -399,21 +402,19 @@ export default class Auth {
 	 */
 	async fetchProvidersForEmail(email) {
 		const response = await this.api('createAuthUri', { identifier: email, continueUri: location.href });
-		delete response.kind;
 		return response;
 	}
 
 	/**
-	 * Gets the user data from the server, and updates the local caches.
-	 * @param {Object} [tokenManager] Only when not signed-in.
-	 * @throws Will throw if the user is not signed-in.
+	 * Gets the user data from the server and updates the local caches.
+	 * @param {Object} [tokenManager] Only when not logged in.
+	 * @throws Will throw if the user is not signed in.
 	 */
 	async fetchProfile(tokenManager = this.user && this.user.tokenManager) {
 		if (!tokenManager) await this.enforceAuth();
 
 		const [userData] = (await this.api('lookup', { idToken: tokenManager.idToken })).users;
 
-		delete userData.kind;
 		userData.tokenManager = tokenManager;
 
 		await this.setState(userData);
@@ -442,7 +443,6 @@ export default class Auth {
 			updatedData.tokenManager = this.user.tokenManager;
 		}
 
-		delete updatedData.kind;
 		delete updatedData.idToken;
 		delete updatedData.refreshToken;
 
