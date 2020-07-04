@@ -1,4 +1,4 @@
-import Auth from '../src/main.js';
+import Auth from '../src/mod.ts';
 
 let assignMock = jest.fn(href => {
 	window.location.href = href;

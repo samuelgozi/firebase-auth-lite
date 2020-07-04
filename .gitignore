@@ -61,7 +61,7 @@ typings/
 .DS_Store
 
 # Distribution build
-dist/
+dist
 
 # Sensitive data needed for testing.
 config.js

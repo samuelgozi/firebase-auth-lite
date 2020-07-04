@@ -4,19 +4,28 @@
 		"browser": true,
 		"jest/globals": true
 	},
-	"parser": "babel-eslint",
 	"parserOptions": {
 		"ecmaVersion": 2017,
 		"sourceType": "module"
 	},
-	"extends": ["eslint:recommended", "plugin:jest/recommended"],
+	"parser": "babel-eslint",
+	"extends": ["eslint:recommended", "plugin:jest/recommended", "prettier"],
 	"rules": {
 		"no-console": ["error", { "allow": ["error"] }],
 		"indent": ["error", "tab", { "SwitchCase": 1 }],
 		"linebreak-style": ["error", "unix"],
 		"quotes": ["error", "single", { "avoidEscape": true }],
 		"semi": ["error", "always"],
-		"no-mixed-spaces-and-tabs": ["warn", "smart-tabs"]
+		"no-mixed-spaces-and-tabs": ["warn", "smart-tabs"],
+		"prefer-rest-params": "warn",
+		"prefer-const": "warn",
+		"prettier/prettier": "error"
 	},
-	"plugins": ["babel", "jest"]
+	"overrides": [
+		{
+			"files": ["*.ts"],
+			"parser": "@typescript-eslint/parser"
+		}
+	],
+	"plugins": ["jest", "prettier"]
 }

@@ -107,7 +107,7 @@ export default class Auth {
 	readonly apiKey: string;
 	readonly name: string = 'default';
 	readonly storage: Storage = storageApi;
-	readonly redirectUri: string;
+	readonly redirectUri?: string;
 	private listeners = [];
 	private ref?: Promise<any>;
 	user?: User;
