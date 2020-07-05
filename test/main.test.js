@@ -68,7 +68,7 @@ describe('Auth', () => {
 		});
 
 		describe('Initializes the "user" property', () => {
-			test('Reads the username from storage when already logged in', async () => {
+			test('Reads the username from storage when already signed-in', async () => {
 				// The constructor makes some requests.
 				// We have to mock them for this not to throw
 				fetch.mockResponse(`{ "users": [${JSON.stringify(mockUserData)}] }`);
@@ -84,7 +84,7 @@ describe('Auth', () => {
 				expect(auth.user).toEqual(mockUserData);
 			});
 
-			test('Updates the stored data if the user is logged in', async () => {
+			test('Updates the stored data if the user is signed-in', async () => {
 				// The constructor makes some requests.
 				// We have to mock them for this not to throw
 				fetch.mockResponse('{"users": [{ "username": "updated!" }]}');
@@ -105,7 +105,7 @@ describe('Auth', () => {
 				expect(userData).toEqual(auth.user);
 			});
 
-			test('Refreshed the token when logged in and token has expired', async () => {
+			test('Refreshed the token when signed-in and token has expired', async () => {
 				fetch.mockResponses('{ "id_token": "123", "refresh_token": "456" }', '{"users": [{ "updated": true }]}');
 
 				localStorage.setItem(
@@ -139,7 +139,7 @@ describe('Auth', () => {
 			});
 		});
 
-		test('Calls the listeners when the user is not logged in', async () => {
+		test('Calls the listeners when the user is not signed-in', async () => {
 			const auth = new Auth({ apiKey: 'key' });
 
 			const userData = await new Promise(resolve => {
@@ -150,7 +150,7 @@ describe('Auth', () => {
 			expect(auth.user).toEqual(null);
 		});
 
-		test("Doesn't make any requests when the user is not logged in", async () => {
+		test("Doesn't make any requests when the user is not signed-in", async () => {
 			// The constructor makes some requests.
 			// We have to mock them for this not to throw
 			fetch.mockResponse('{}');
@@ -166,10 +166,10 @@ describe('Auth', () => {
 			expect(fetch.mock.calls.length).toEqual(0);
 		});
 
-		test('Signs out a previously signed in user when their token has expired', async () => {
+		test('Signs-out a previously signed-in user when their token has expired', async () => {
 			fetch.mockResponse('{"error": {"message": "TOKEN_EXPIRED"}}', { status: 403 });
 
-			// Previously signed in user
+			// Previously signed-in user
 			localStorage.setItem(
 				'Auth:User:key:default',
 				JSON.stringify({
@@ -186,7 +186,7 @@ describe('Auth', () => {
 			// First call to the listener will be done after reading the local storage.
 			// After that a request to update the user data will be made, and it will return
 			// the fetch error "TOKEN_EXPIRED", the constructor will catch that, then
-			// sign out the user and call the listener a second time.
+			// sign-out the user and call the listener a second time.
 			let calls = 0;
 			const userData = await new Promise(resolve => {
 				auth.listen(user => {
@@ -199,10 +199,10 @@ describe('Auth', () => {
 			expect(userData).toBe(null);
 		});
 
-		test('Signs out a previously signed in user when their token is invalid', async () => {
+		test('Signs-out a previously signed-in user when their token is invalid', async () => {
 			fetch.mockResponse('{"error": {"message": "INVALID_ID_TOKEN"}}', { status: 403 });
 
-			// Previously signed in user
+			// Previously signed-in user
 			localStorage.setItem(
 				'Auth:User:key:default',
 				JSON.stringify({
@@ -219,7 +219,7 @@ describe('Auth', () => {
 			// First call to the listener will be done after reading the local storage.
 			// After that a request to update the user data will be made, and it will return
 			// the fetch error "INVALID_ID_TOKEN", the constructor will catch that, then
-			// sign out the user and call the listener a second time.
+			// sign-out the user and call the listener a second time.
 			let calls = 0;
 			const userData = await new Promise(resolve => {
 				auth.listen(user => {
@@ -375,12 +375,12 @@ describe('Auth', () => {
 	});
 
 	describe('enforceAuth()', () => {
-		test('Throws when the user is not logged in', async () => {
+		test('Throws when the user is not signed-in', async () => {
 			const auth = new Auth({ apiKey: 'key' });
-			await expect(auth.enforceAuth()).rejects.toThrow('The user must be logged-in to use this method.');
+			await expect(auth.enforceAuth()).rejects.toThrow('The user must be signed-in to use this method.');
 		});
 
-		test("Doesn't make any requests when the user is not logged in", async () => {
+		test("Doesn't make any requests when the user is not signed-in", async () => {
 			// The constructor makes some requests.
 			// We must mock them, to prevent a throw
 			fetch.mockResponse('{}');
@@ -482,7 +482,7 @@ describe('Auth', () => {
 			fetch.mockResponse('{"users": [{ "updated": true }]}');
 
 			const auth = new Auth({ apiKey: 'key' });
-			// Mock logged in user.
+			// Mock signed-in user.
 			auth.user = {
 				tokenManager: {
 					idToken: 'idTokenString',
@@ -509,7 +509,7 @@ describe('Auth', () => {
 			});
 
 			const auth = new Auth({ apiKey: 'key' });
-			// Mock logged in user.
+			// Mock signed-in user.
 			auth.user = {
 				tokenManager: {
 					idToken: 'idTokenString',
@@ -534,7 +534,7 @@ describe('Auth', () => {
 
 			const auth = new Auth({ apiKey: 'key' });
 
-			// Mock logged in user.
+			// Mock signed-in user.
 			auth.user = {
 				tokenManager: {
 					idToken: 'idTokenString',
@@ -559,7 +559,7 @@ describe('Auth', () => {
 			const auth = new Auth({ apiKey: 'key' });
 			await mockLoggedIn(auth);
 
-			// Mock logged in user.
+			// Mock signed-in user.
 			auth.user = {
 				tokenManager: {
 					idToken: 'idTokenString',
@@ -577,7 +577,7 @@ describe('Auth', () => {
 	});
 
 	describe('AuthorizedRequest()', () => {
-		test('Adds Authorization headers when the user is logged in.', async () => {
+		test('Adds Authorization headers when the user is signed-in.', async () => {
 			// The constructor makes some requests.
 			// We have to mock them for this not to throw
 			fetch.mockResponse('{}');
@@ -593,7 +593,7 @@ describe('Auth', () => {
 			expect(headers.get('Authorization')).toEqual('Bearer idTokenString');
 		});
 
-		test("Doesn't change the request when the user is not logged in", async () => {
+		test("Doesn't change the request when the user is not signed-in", async () => {
 			// The constructor makes some requests.
 			// We have to mock them for this not to throw
 			fetch.mockResponse('{}');
@@ -645,7 +645,7 @@ describe('Auth', () => {
 			const auth = new Auth({ apiKey: 'key', redirectUri: 'redirectHere' });
 
 			await expect(auth.signInWithProvider({ provider: 'google.com', linkAccount: true })).rejects.toThrow(
-				'The user must be logged-in to use this method.'
+				'The user must be signed-in to use this method.'
 			);
 		});
 
@@ -764,7 +764,7 @@ describe('Auth', () => {
 	});
 
 	describe('senbOobCode()', () => {
-		test('Throws when request type is "verify email" but not logged in', async () => {
+		test('Throws when request type is "verify email" but not signed-in', async () => {
 			const auth = new Auth({ apiKey: 'key' });
 			await expect(auth.sendOobCode('VERIFY_EMAIL')).rejects.toThrow();
 		});
@@ -909,9 +909,9 @@ describe('Auth', () => {
 	});
 
 	describe('fetchProfile()', () => {
-		test('Throws when the user is not logged in', async () => {
+		test('Throws when the user is not signed-in', async () => {
 			const auth = new Auth({ apiKey: 'key' });
-			await expect(auth.fetchProfile()).rejects.toThrow('The user must be logged-in to use this method.');
+			await expect(auth.fetchProfile()).rejects.toThrow('The user must be signed-in to use this method.');
 		});
 
 		test('Makes correct request', async () => {

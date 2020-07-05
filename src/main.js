@@ -4,10 +4,10 @@
  */
 
 /**
- * Settings object for an IDP (Identity Provider).
+ * Settings object for an IdP (Identity Provider).
  * @typedef {Object} ProviderOptions
  * @property {string} options.name The name of the provider in lowercase.
- * @property {string} [options.scope] The scopes for the IDP, this is optional and defaults to "openid email".
+ * @property {string} [options.scope] The scopes for the IdP, this is optional and defaults to "openid email".
  */
 
 /**
@@ -66,8 +66,8 @@ export default class Auth {
 		// we need to first check if this environment supports `addEventListener` on the window.
 		'addEventListener' in window &&
 			window.addEventListener('storage', e => {
-				// This code will run if localStorage for this user
-				// data was updated from a different browser window.
+				// This code will run if the local storage for this user
+				// was updated from a different browser window.
 				if (e.key !== this.sKey('User')) return;
 				this.setState(JSON.parse(e.newValue), false);
 			});
@@ -84,7 +84,7 @@ export default class Auth {
 	}
 
 	/**
-	 * Set up a function that will be called whenever the user state is changed.
+	 * Sets up a function that will be called whenever the user state is changed.
 	 * @param {function} cb The function to call when the event is triggered.
 	 * @returns {function} Function that will unsubscribe your callback from being called.
 	 */
@@ -104,7 +104,7 @@ export default class Auth {
 	}
 
 	/**
-	 * Make post request to a specific endpoint and return the response.
+	 * Makes post request to a specific endpoint and return the response.
 	 * @param {string} endpoint The name of the endpoint.
 	 * @param {any} request Body to pass to the request.
 	 * @private
@@ -122,7 +122,7 @@ export default class Auth {
 			let data = await response.json();
 
 			// If the response returned an error, try to get a Firebase error code/message.
-			// Sometimes the error codes are joined with an explanation, we don't need that (its a bug).
+			// Sometimes the error codes are joined with an explanation, we don't need that.
 			// So we remove the unnecessary part.
 			if (!response.ok) {
 				const code = data.error.message.replace(/: [\w ,.'"()]+$/, '');
@@ -137,19 +137,19 @@ export default class Auth {
 	}
 
 	/**
-	 * Makes sure the user is logged in and has up-to-date credentials.
-	 * @throws Will throw if the user is not signed in.
+	 * Makes sure the user is signed-in and has up-to-date credentials.
+	 * @throws Will throw if the user is not signed-in.
 	 * @private
 	 */
 	async enforceAuth() {
-		if (!this.user) throw Error('The user must be logged-in to use this method.');
+		if (!this.user) throw Error('The user must be signed-in to use this method.');
 		return this.refreshIdToken(); // Won't do anything if the token is valid.
 	}
 
 	/**
-	 * Updates the user data in the localStorage.
+	 * Updates the user data in the local storage.
 	 * @param {Object} userData The new user data.
-	 * @param {boolean} [updateStorage = true] Whether to update local storage or not.
+	 * @param {boolean} [persist = true] Whether to update local storage or not.
 	 * @private
 	 */
 	async setState(userData, persist = true, emit = true) {
@@ -159,7 +159,7 @@ export default class Auth {
 	}
 
 	/**
-	 * Sign out the currently signed in user.
+	 * Sign-out the currently signed-in user.
 	 * Removes all data stored in the storage that's associated with the user.
 	 */
 	signOut() {
@@ -244,7 +244,7 @@ export default class Auth {
 		const { provider, oauthScope, context, linkAccount } =
 			typeof options === 'string' ? { provider: options } : options;
 
-		// Make sure the user is logged in when an "account link" was requested.
+		// Makes sure the user is signed-in when an "account link" was requested.
 		if (linkAccount) await this.enforceAuth();
 
 		// Get the url and other data necessary for the authentication.
@@ -260,7 +260,7 @@ export default class Auth {
 		// Is required to finish the auth flow, I believe this is used to mitigate CSRF attacks.
 		// (No docs on this...)
 		await this.storage.set(this.sKey('SessionId'), sessionId);
-		// Save if this is a fresh log-in or a "link account" request.
+		// Save if this is a fresh signed-in or a "link account" request.
 		linkAccount && (await this.storage.set(this.sKey('LinkAccount'), true));
 
 		// Finally - redirect the page to the auth endpoint.
@@ -278,14 +278,14 @@ export default class Auth {
 		const sessionId = await this.storage.get(this.sKey('SessionId'));
 		// Get the indication if this was a "link account" request.
 		const linkAccount = await this.storage.get(this.sKey('LinkAccount'));
-		// Check for the edge case in which the user signed out before completing the linkAccount
+		// Check for the edge case in which the user signed-out before completing the linkAccount
 		// Request.
 		if (linkAccount && !this.user) throw Error('Request to "Link account" was made, but user is no longer signed-in');
 		await this.storage.remove(this.sKey('LinkAccount'));
 
 		// Try to exchange the Auth Code for an idToken and refreshToken.
 		const { idToken, refreshToken, expiresAt, context } = await this.api('signInWithIdp', {
-			// If this is a "link account" flow, then attach the idToken of the currently logged in account.
+			// If this is a "link account" flow, then attach the idToken of the currently signed-in account.
 			idToken: linkAccount ? this.user.tokenManager.idToken : undefined,
 			requestUri,
 			sessionId,
@@ -401,8 +401,8 @@ export default class Auth {
 
 	/**
 	 * Gets the user data from the server and updates the local caches.
-	 * @param {Object} [tokenManager] Only when not logged in.
-	 * @throws Will throw if the user is not signed in.
+	 * @param {Object} [tokenManager] Only when not signed-in.
+	 * @throws Will throw if the user is not signed-in.
 	 */
 	async fetchProfile(tokenManager = this.user && this.user.tokenManager) {
 		if (!tokenManager) await this.enforceAuth();
@@ -418,7 +418,7 @@ export default class Auth {
 	/**
 	 * Update user's profile.
 	 * @param {Object} newData An object with the new data to overwrite.
-	 * @throws Will throw if the user is not signed in.
+	 * @throws Will throw if the user is not signed-in.
 	 */
 	async updateProfile(newData) {
 		await this.enforceAuth();
@@ -446,8 +446,8 @@ export default class Auth {
 	}
 
 	/**
-	 * Deletes the currently logged in account and logs out.
-	 * @throws Will throw if the user is not signed in.
+	 * Deletes the currently signed-in account and logs out.
+	 * @throws Will throw if the user is not signed-in.
 	 */
 	async deleteAccount() {
 		await this.enforceAuth();
