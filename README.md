@@ -44,8 +44,8 @@ What you are essentially doing is whitelisting that URL, which is a hidden URL t
 
 You might be curious as to why I'm avoiding using Firebases endpoint, well, the reasons are:
 
-1. More secure, it's the reason you need to whitelist in the first place is for security.
-2. Way faster, in some cases up to 5 seconds faster.
+1. It's more secure, the reason you need to whitelist in the first place is for security.
+2. It's way faster, in some cases up to 5 seconds faster.
 3. I don't trust Firebase (or anyone) with my user's private data, and you shouldn't either.
 
 Yes, I know that the third one sounds exaggerated, especially when we rely on them anyways. But their endpoint works on the client (It's JS) and you shouldn't trust the client.
