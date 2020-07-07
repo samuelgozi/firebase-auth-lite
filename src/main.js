@@ -13,10 +13,10 @@
 /**
  * Object response from a "fetchProvidersForEmail" request.
  * @typedef {Object} ProvidersForEmailResponse
- * @property {Array.<string>} allProviders All providers the user has once used to do federated sign-in.
- * @property {boolean} registered All sign-in methods this user has used.
+ * @property {Array.<string>} allProviders All providers the user has once used to do federated sign in.
+ * @property {boolean} registered All sign in methods this user has used.
  * @property {string} sessionId Session ID which should be passed in the following verifyAssertion request.
- * @property {Array.<string>} signinMethods All sign-in methods this user has used.
+ * @property {Array.<string>} signinMethods All sign in methods this user has used.
  */
 
 /**
@@ -138,12 +138,12 @@ export default class Auth {
 	}
 
 	/**
-	 * Makes sure the user is signed-in and has up-to-date credentials.
-	 * @throws Will throw if the user is not signed-in.
+	 * Makes sure the user is signed in and has up-to-date credentials.
+	 * @throws Will throw if the user is not signed in.
 	 * @private
 	 */
 	async enforceAuth() {
-		if (!this.user) throw Error('The user must be signed-in to use this method.');
+		if (!this.user) throw Error('The user must be signed in to use this method.');
 		return this.refreshIdToken(); // Won't do anything if the token is valid.
 	}
 
@@ -160,7 +160,7 @@ export default class Auth {
 	}
 
 	/**
-	 * Sign out the currently signed-in user.
+	 * Sign out the currently signed in user.
 	 * Removes all data stored in the storage that's associated with the user.
 	 */
 	signOut() {
@@ -232,7 +232,7 @@ export default class Auth {
 
 	/**
 	 * Starts the auth flow of a federated ID provider.
-	 * Also, it will redirect the page to the federated sign-in page.
+	 * Also, it will redirect the page to the federated sign in page.
 	 * @param {oauthFlowOptions|string} options An options object or a string with the name of the provider.
 	 */
 	async signInWithProvider(options) {
@@ -246,7 +246,7 @@ export default class Auth {
 			typeof options === 'string' ? { provider: options } : options;
 
 		linkAccount && (await this.enforceAuth());
-		// Makes sure the user is signed-in when an "account link" was requested.
+		// Makes sure the user is signed in when an "account link" was requested.
 
 		// Get the url and other data necessary for the authentication.
 		const { authUri, sessionId } = await this.api('createAuthUri', {
@@ -261,7 +261,7 @@ export default class Auth {
 		// Is required to finish the auth flow, I believe this is used to mitigate CSRF attacks.
 		// (No docs on this...)
 		await this.storage.set(this.sKey('SessionId'), sessionId);
-		// Save if this is a fresh signed-in or a "link account" request.
+		// Save if this is a fresh signed in or a "link account" request.
 		linkAccount && (await this.storage.set(this.sKey('LinkAccount'), true));
 
 		// Finally - redirect the page to the auth endpoint.
@@ -279,15 +279,15 @@ export default class Auth {
 		const sessionId = await this.storage.get(this.sKey('SessionId'));
 		// Get the indication if this was a "link account" request.
 		const linkAccount = await this.storage.get(this.sKey('LinkAccount'));
-		// Check for the edge case in which the user signed-out
+		// Check for the edge case in which the user signed out
 		// before completing the linkAccount request.
-		if (linkAccount && !this.user) throw Error('Request to "Link account" was made, but user is no longer signed-in');
+		if (linkAccount && !this.user) throw Error('Request to "Link account" was made, but user is no longer signed in');
 
 		await this.storage.remove(this.sKey('LinkAccount'));
 
 		// Try to exchange the Auth Code for an idToken and refreshToken.
 		const { idToken, refreshToken, expiresAt, context } = await this.api('signInWithIdp', {
-			// If this is a "link account" flow, then attach the idToken of the currently signed-in account.
+			// If this is a "link account" flow, then attach the idToken of the currently signed in account.
 			idToken: linkAccount ? this.user.tokenManager.idToken : undefined,
 			requestUri,
 			sessionId,
@@ -304,14 +304,14 @@ export default class Auth {
 	}
 
 	/**
-	 * Handles all sign-in flows that complete via redirects.
+	 * Handles all sign in flows that complete via redirects.
 	 * Fails silently if no redirect was detected.
 	 */
 	async handleSignInRedirect() {
 		// OAuth Federated Identity Provider flow.
 		if (location.href.match(/[&?]code=/)) return this.finishProviderSignIn();
 
-		// Email sign-in flow.
+		// Email sign in flow.
 		if (location.href.match(/[&?]oobCode=/)) {
 			const oobCode = location.href.match(/[?&]oobCode=([^&]+)/)[1];
 			const email = location.href.match(/[?&]email=([^&]+)/)[1];
@@ -361,9 +361,8 @@ export default class Auth {
 
 	/**
 	 * Sends an out-of-band confirmation code for an account.
-	 * It can be used to reset a password, to verify an email address and send a sign-in email link.
-	 * The `email` argument is not needed only when verifying an email (In that case it will be completely ignored, even if specified), otherwise it is required.
-	 * Can be used to reset a password, to verify an email address and send a Sign-in email link.
+	 * Can be used to reset a password, to verify an email address and send a Sign in email link.
+	 * The email argument is not needed when verifying an email (it's ignored). Otherwise, it's required.
 	 * @param {'PASSWORD_RESET'|'VERIFY_EMAIL'|'EMAIL_SIGNIN'} requestType The type of out-of-band (OOB) code to send.
 	 * @param {string} [email] When the `requestType` is `PASSWORD_RESET` or `EMAIL_SIGNIN` you need to provide an email address.
 	 * @returns {Promise}
@@ -405,8 +404,8 @@ export default class Auth {
 	}
 
 	/**
-	 * @param {Object} [tokenManager] Only when not signed-in.
-	 * @throws Will throw if the user is not signed-in.
+	 * @param {Object} [tokenManager] Only when not signed in.
+	 * @throws Will throw if the user is not signed in.
 	 * Gets the user data from the server and updates the local caches.
 	 */
 	async fetchProfile(tokenManager = this.user && this.user.tokenManager) {
@@ -422,7 +421,7 @@ export default class Auth {
 
 	/**
 	 * @param {Object} newData An object with the new data.
-	 * @throws Will throw if the user is not signed-in.
+	 * @throws Will throw if the user is not signed in.
 	 * Update user's profile.
 	 */
 	async updateProfile(newData) {
@@ -451,8 +450,8 @@ export default class Auth {
 	}
 
 	/**
-	 * Deletes the currently signed-in account then sign out.
-	 * @throws Will throw if the user is not signed-in.
+	 * Deletes the currently signed in account then sign out.
+	 * @throws Will throw if the user is not signed in.
 	 */
 	async deleteAccount() {
 		await this.enforceAuth();
