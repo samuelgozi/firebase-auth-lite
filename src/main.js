@@ -105,8 +105,8 @@ export default class Auth {
 	}
 
 	/**
-	 * @param {string} endpoint Name of the endpoint.
 	 * Makes post request to a specific endpoint and return the response.
+	 * @param {string} endpoint Name of the endpoint.
 	 * @param {any} request Body to pass to the request.
 	 * @private
 	 */

@@ -382,7 +382,7 @@ describe('Auth', () => {
 
 		test("Doesn't make any requests when the user is not signed in", async () => {
 			// The constructor makes some requests.
-			// We must mock them, to prevent a throw
+			// We must mock them to prevent a throw
 			fetch.mockResponse('{}');
 
 			try {
