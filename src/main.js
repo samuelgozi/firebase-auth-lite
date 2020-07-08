@@ -75,7 +75,6 @@ export default class Auth {
 
 	/**
 	 * Emits an event and triggers all the listeners.
-	 * Emits an event and triggers all of the listeners.
 	 * @param {string} name Name of the event to trigger.
 	 * @param {any} data Data you want to pass to the event listeners.
 	 * @private
@@ -150,7 +149,7 @@ export default class Auth {
 	/**
 	 * Updates the user data in localStorage.
 	 * @param {Object} userData New user data.
-	 * @param {boolean} [persist = true] Whether to update local storage or not.
+	 * @param {boolean} [persist = true] Whether to update localStorage or not.
 	 * @private
 	 */
 	async setState(userData, persist = true, emit = true) {
@@ -257,7 +256,7 @@ export default class Auth {
 			context
 		});
 
-		// Save the sessionId that we just received in the local storage.
+		// Save the sessionId that we just received in the localStorage.
 		// Is required to finish the auth flow, I believe this is used to mitigate CSRF attacks.
 		// (No docs on this...)
 		await this.storage.set(this.sKey('SessionId'), sessionId);
