@@ -108,7 +108,7 @@ export default class Auth {
 	readonly name: string = 'default';
 	readonly storage: Storage = storageApi;
 	readonly redirectUri?: string;
-	private listeners = [];
+	private listeners = Array<Function>;
 	private ref?: Promise<any>;
 	user?: User;
 
@@ -133,11 +133,18 @@ export default class Auth {
 			});
 	}
 
+
+	/** Set up a function that will be called whenever the user state is changed. */
+	listen(cb: Function): Function {
+		this.listeners.push(cb);
+		return () => (this.listeners = this.listeners.filter(fn => fn !== cb));
+	}
+
 	private emit() {
 		this.listeners.forEach(cb => cb(this.user));
 	}
 
-	private sKey(key) {
+	private sKey(key: string) {
 		return `Auth:${key}:${this.apiKey}:${this.name}`;
 	}
 
@@ -185,16 +192,6 @@ export default class Auth {
 	}
 
 	/**
-	 * Set up a function that will be called whenever the user state is changed.
-	 * @param  cb The function to call when the event is triggered.
-	 * @returns function that will unsubscribe your callback from being called.
-	 */
-	listen(cb: Function): Function {
-		this.listeners.push(cb);
-		return () => (this.listeners = this.listeners.filter(fn => fn !== cb));
-	}
-
-	/**
 	 * Sign out the currently signed in user.
 	 * Removes all data stored in the storage that's associated with the user.
 	 */
@@ -237,11 +234,9 @@ export default class Auth {
 
 	/**
 	 * Uses native fetch, but adds authorization headers otherwise the API is exactly the same as native fetch.
-	 * @param {Request|Object|string} resource the resource to send the request to, or an options object.
-	 * @param {Object} init an options object.
 	 */
-	async authorizedRequest(resource, init) {
-		const request = resource instanceof Request ? resource : new Request(resource, init);
+	async authorizedRequest(input: RequestInfo, init?: RequestInit) {
+		const request = input instanceof Request ? input : new Request(input, init);
 
 		if (this.user) {
 			await this.refreshIdToken(); // Won't do anything if the token didn't expire yet.
