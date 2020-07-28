@@ -1,6 +1,6 @@
 # Firebase auth lite (Beta) [![codecov](https://codecov.io/gh/samuelgozi/firebase-auth-lite/branch/master/graph/badge.svg)](https://codecov.io/gh/samuelgozi/firebase-auth-lite) ![bundlephobia](https://badgen.net/bundlephobia/minzip/firebase-auth-lite)
 
-A performance focused alternative to the official firebase auth library that is designed to work with my other alternatives for [storage](https://github.com/samuelgozi/firebase-storage-lite) and [firestore](https://github.com/samuelgozi/firebase-firestore-lite).
+A performance focused alternative to the official Firebase authentication library that is designed to work with my other alternatives for [storage](https://github.com/samuelgozi/firebase-storage-lite) and [firestore](https://github.com/samuelgozi/firebase-firestore-lite).
 
 The goal of this library is to provide a performance focused alternative to the official SDKs. This comes with some costs. The big one is browser support, we only support modern browsers, but you can always run them through Babel.
 
@@ -9,13 +9,13 @@ The goal of this library is to provide a performance focused alternative to the 
 ## What else do I need to consider?
 
 The API is completely different. This is not a drop-in replacement, instead our API is much simpler and easier to use.
-In addition you should consider the next points:
+In addition, you should consider the next points:
 
 1. This is still work in progress and the API will change without warning until version 1.0.
 2. There is a small difference working with Federated Identity Providers.
 3. Sessions can only be persisted in localStorage (More options will be added).
-4. The code is written with modern JS and you are responsible for tranpiling it for your targets, but babelrc configuration is ready. The code also makes use of the Fetch API and local storage.
-5. Not fully tested yet(I don't have a good testing strategy yet...)
+4. The code is written with modern JS and you are responsible for transpiling it for your targets, but babelrc configuration is ready. The code also makes use of the Fetch API and localStorage.
+5. Not fully tested yet (I don't have a good testing strategy yet...)
 
 ## Features and roadmap
 
@@ -38,21 +38,21 @@ The roadmap and progress to 1.0 can be seen at [issue #2](https://github.com/sam
 
 ## Setting up Federated identity providers
 
-You might have noticed that when adding a Oauth Sign-in methid in the firebase console, you are asked to add a URL that looks something like this to the Oauth's configurations: `https://[app-id].firebaseapp.com/__/auth/handler`
+You might have noticed that when adding a OAuth sign in method in the Firebase console, you are asked to add a URL that looks something like this to the OAuth's configurations: `https://[app-id].firebaseapp.com/__/auth/handler`
 
-What you are essentially doing is whitelisting that URL, which is a hidden URL that exists in every firebase app. When using this library, you will need to add the URL of **your app** instead of the firebase's one. You need to add the URL of the page in your app that will handle the log in. You'll see what I mean in the docs below.
+What you are essentially doing is whitelisting that URL, which is a hidden URL that exists in every firebase app. When using this library, you will need to add the URL of **your app** instead of the Firebase's one. You need to add the URL of the page in your app that will handle the sign in. You'll see what I mean in the docs below.
 
-You might be curious as to why I'm auoiding using firebases endpoint, well, the reasons are:
+You might be curious as to why I'm avoiding using Firebases endpoint, well, the reasons are:
 
-1. It is more secure. The reason you need to whitelist in the first place is for security.
-2. It is way faster, in some cases up to 5 seconds faster.
-3. I don't trust firebase (or anyone) with my user's private data, and you shouldn't either.
+1. It’s more secure. That’s the reason you need to whitelist in the first place, is for security
+2. It's way faster, in some cases up to 5 seconds faster.
+3. I don't trust Firebase (or anyone) with my user's private data, and you shouldn't either.
 
 Yes, I know that the third one sounds exaggerated, especially when we rely on them anyways. But their endpoint works on the client (It's JS) and you shouldn't trust the client.
 
 ## How to install
 
-Once again i will say that its all still work in progress. Some things might break, and the API might change.
+Once again, it's all still work in progress. Some things might break, and the API might change.
 However, I do encourage anyone to try it. I need feedback in order to improve it, so please use it and don't hesitate to leave feedback!
 
 ```
@@ -89,7 +89,7 @@ const auth = new Auth({
 });
 ```
 
-Then to sign-up use the `signUp` method.
+Then to sign up use the `signUp` method.
 Please note that after a sign up, the user will be signed in automatically.
 
 ```js
@@ -97,7 +97,7 @@ Please note that after a sign up, the user will be signed in automatically.
 auth.signUp('email', 'password');
 ```
 
-In order to sign-in, pass the email and password to the `signInWithPassword` method.
+In order to sign in, pass the email and password to the `signInWithPassword` method.
 
 ```js
 auth.signIn('email', 'password');
