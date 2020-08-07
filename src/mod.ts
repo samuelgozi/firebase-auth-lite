@@ -171,6 +171,8 @@ export default class Auth {
 			// Add a hidden date property to the returned object.
 			// Used mostly to calculate the expiration date for tokens.
 			Object.defineProperty(data, 'expiresAt', { value: Date.parse(response.headers.get('date')) + 3600 * 1000 });
+			// Remove redundant property
+			delete data.kind;
 			return data;
 		});
 	}
@@ -417,7 +419,6 @@ export default class Auth {
 	 */
 	async fetchProvidersForEmail(email) {
 		const response = await this.api('createAuthUri', { identifier: email, continueUri: location.href });
-		delete response.kind;
 		return response as ProvidersForEmail;
 	}
 
@@ -431,7 +432,6 @@ export default class Auth {
 
 		const userData = (await this.api('lookup', { idToken: tokenManager.idToken })).users[0];
 
-		delete userData.kind;
 		userData.tokenManager = tokenManager;
 
 		await this.setState(userData);
@@ -460,7 +460,6 @@ export default class Auth {
 			updatedData.tokenManager = this.user.tokenManager;
 		}
 
-		delete updatedData.kind;
 		delete updatedData.idToken;
 		delete updatedData.refreshToken;
 
