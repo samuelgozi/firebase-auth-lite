@@ -14,7 +14,7 @@ In addition you should consider the next points:
 1. This is still work in progress and the API will change without warning until version 1.0.
 2. There is a small difference working with Federated Identity Providers.
 3. Sessions can only be persisted in localStorage (More options will be added).
-4. The code is written with modern JS and you are responsible for tranpiling it for your targets, but babelrc configuration is ready. The code also makes use of the Fetch API and local storage.
+4. The code is written with modern JS and you are responsible for transpiling it for your targets, but babelrc configuration is ready. The code also makes use of the Fetch API and local storage.
 5. Not fully tested yet(I don't have a good testing strategy yet...)
 
 ## Features and roadmap
@@ -38,11 +38,11 @@ The roadmap and progress to 1.0 can be seen at [issue #2](https://github.com/sam
 
 ## Setting up Federated identity providers
 
-You might have noticed that when adding a Oauth Sign-in methid in the firebase console, you are asked to add a URL that looks something like this to the Oauth's configurations: `https://[app-id].firebaseapp.com/__/auth/handler`
+You might have noticed that when adding a Oauth Sign-in method in the firebase console, you are asked to add a URL that looks something like this to the Oauth's configurations: `https://[app-id].firebaseapp.com/__/auth/handler`
 
 What you are essentially doing is whitelisting that URL, which is a hidden URL that exists in every firebase app. When using this library, you will need to add the URL of **your app** instead of the firebase's one. You need to add the URL of the page in your app that will handle the log in. You'll see what I mean in the docs below.
 
-You might be curious as to why I'm auoiding using firebases endpoint, well, the reasons are:
+You might be curious as to why I'm avoiding using firebases endpoint, well, the reasons are:
 
 1. It is more secure. The reason you need to whitelist in the first place is for security.
 2. It is way faster, in some cases up to 5 seconds faster.
@@ -133,12 +133,47 @@ The user will be redirected to `http://example.com/auth`, we need to make sure t
 
 In that URL we need to finish the auth flow. We do that very easily by running a function. You can even do it on the same page you redirected from.
 
+### Authenticate with magic link (Email link).
+
+To be able to do this, we need to send an OobCode to the users email, and then handle the user click on the link received.
+
 ```js
-// This runs in the `redirectUri` location.
-auth.handleSignInRedirect();
+const auth = new Auth({
+	apiKey: '[The Firebase API key]',
+	redirectUri: 'http://example.com/auth'
+});
+
+function loginWithEmail() {
+	const email = document.getElementById('email-input').value;
+	// We need to store somewhere the user email localy in order to validate that is the same user who clicked the email than the one who requested the email
+	window.localStorage.setItem('loginEmail', email);
+
+	// Then we request the email to be sent to the user
+	auth.sendOobCode('EMAIL_SIGNIN', email)
+}
+
+// Listen for the click, and run the sign in function.
+document.getElementById('sign-in').addEventListener('click', loginWithEmail);
 ```
 
-That's it. After this the user should be signed in.
+In the email the user will receive an email who will redirect him to our previously defined redirectUri, in this case `http://example.com/auth`, we need to make sure that we whitelisted this URL in the provider's settings. If not, we will receive an error with instructions on how to do so from the provider.
+
+In that URL we need to finish the auth flow. We do that very easily by running a function. You can even do it on the same page you redirected from.
+
+```js
+async handleRedirect() {
+	try {
+		await auth.handleSignInRedirect({
+			email: window.localStorage.getItem('loginEmail'),
+		});
+		window.localStorage.removeItem('loginEmail');
+
+		// Do whatever you want with the newly logged in user
+	} catch (error) {
+		console.error(error);
+	}
+}
+```
 
 ### Authenticate anonymously.
 
