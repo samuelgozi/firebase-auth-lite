@@ -307,14 +307,14 @@ export default class Auth {
 	 * Handles all sign-in flows that complete via redirects.
 	 * Fails silently if no redirect was detected.
 	 */
-	async handleSignInRedirect() {
+	async handleSignInRedirect(options = {}) {
 		// OAuth Federated Identity Provider flow.
 		if (location.href.match(/[&?]code=/)) return this.finishProviderSignIn();
 
 		// Email sign-in flow.
 		if (location.href.match(/[&?]oobCode=/)) {
 			const oobCode = location.href.match(/[?&]oobCode=([^&]+)/)[1];
-			const email = location.href.match(/[?&]email=([^&]+)/)[1];
+			const email = (options && options.email) || location.href.match(/[?&]email=([^&]+)/)[1];
 			const expiresAt = Date.now() + 3600 * 1000;
 			const { idToken, refreshToken } = await this.api('signInWithEmailLink', { oobCode, email });
 
