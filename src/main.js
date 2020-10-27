@@ -57,7 +57,7 @@ export default class Auth {
 				this.refreshIdToken()
 					.then(() => this.fetchProfile())
 					.catch(e => {
-						if (e.message === 'TOKEN_EXPIRED' || e.message === 'INVALID_ID_TOKEN') return this.signOut();
+						if (e.message === 'TOKEN_EXPIRED' || e.message === 'INVALID_ID_TOKEN' || e.message === 'USER_NOT_FOUND') return this.signOut();
 						throw e;
 					});
 		});
