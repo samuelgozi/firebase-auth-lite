@@ -168,11 +168,12 @@ export default class Auth {
 
 	/**
 	 * Refreshes the idToken by using the locally stored refresh token only if the idToken has expired.
+	 * @param {boolean} [forceRefresh = false] Force IdToken Refresh.
 	 * @private
 	 */
-	async refreshIdToken() {
+	async refreshIdToken(forceRefresh = false) {
 		// If the idToken didn't expire, return.
-		if (Date.now() < this.user.tokenManager.expiresAt) return;
+		if (Date.now() < this.user.tokenManager.expiresAt && !forceRefresh) return;
 
 		// If the request for a new token was already made, then wait for it and return.
 		if (this._ref) return void (await this._ref);
