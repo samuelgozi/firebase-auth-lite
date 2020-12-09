@@ -476,6 +476,16 @@ describe('Auth', () => {
 			expect(fetch.mock.calls.length).toEqual(0);
 		});
 
+		test('Force refresh token even if the token is still valid', async () => {
+			fetch.mockResponse('{"users": [{ "updated": true }]}');
+			
+			const auth = new Auth({ apiKey: 'key' });
+			await mockLoggedIn(auth);
+			await auth.refreshIdToken(true);
+
+			expect(fetch.mock.calls.length).toEqual(1);
+		});
+
 		test('Allow only one concurrent fetch request', async () => {
 			// The constructor makes some requests.
 			// We have to mock them for this not to throw
