@@ -375,7 +375,7 @@ export default class Auth {
 			email = this.user.email;
 		}
 
-		return void this.api('sendOobCode', {
+		return this.api('sendOobCode', {
 			idToken: verifyEmail ? this.user.tokenManager.idToken : undefined,
 			requestType,
 			email,
