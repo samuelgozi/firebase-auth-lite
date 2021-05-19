@@ -44,7 +44,7 @@ function getExpiresAt() {
  * @param {Array.<ProviderOptions|string>} options.providers Array of arguments that will be passed to the addProvider method.
  */
 export default class Auth {
-    constructor({ name = 'default', apiKey, redirectUri, providers = [], storage = localStorageAdapter, lazyInit }) {
+    constructor({ name = 'default', apiKey, redirectUri, providers = [], storage = localStorageAdapter, lazyInit, }) {
         this.refreshTokenRequest = null;
         this.initialized = false;
         if (!apiKey)
@@ -62,7 +62,7 @@ export default class Auth {
             name,
             apiKey,
             redirectUri,
-            providers: {}
+            providers: {},
         });
         for (let options of providers) {
             const { name, scope } = typeof options === 'string' ? { name: options, scope: undefined } : options;
@@ -79,6 +79,9 @@ export default class Auth {
          */
         const storedUser = await this.storage.getItem(`Auth:User:${this.apiKey}:${this.name}`);
         this.user = storedUser ? JSON.parse(storedUser) : null;
+        // reset refreshTokenRequest in case initUser failed the first time and the request never
+        // got properly cleaned up
+        this.refreshTokenRequest = null;
         if (this.user) {
             await this.refreshIdToken();
         }
@@ -98,7 +101,7 @@ export default class Auth {
      * @private
      */
     emit() {
-        this.listeners.forEach(cb => cb(this.user));
+        this.listeners.forEach((cb) => cb(this.user));
     }
     /**
      * Set up a function that will be called whenever the user state is changed.
@@ -110,7 +113,7 @@ export default class Auth {
             cb(this.user);
         }
         // Return a function to unbind the callback.
-        return () => (this.listeners = this.listeners.filter(fn => fn !== cb));
+        return () => (this.listeners = this.listeners.filter((fn) => fn !== cb));
     }
     /**
      * Make post request to a specific endpoint, and return the response.
@@ -124,7 +127,7 @@ export default class Auth {
             : `https://identitytoolkit.googleapis.com/v1/accounts:${endpoint}?key=${this.apiKey}`;
         return fetch(url, {
             method: 'POST',
-            body: typeof body === 'string' ? body : JSON.stringify(body)
+            body: typeof body === 'string' ? body : JSON.stringify(body),
         }).then(async (response) => {
             const data = await response.json();
             // If the response has an error, check to see if we have a human readable version of it,
@@ -187,13 +190,13 @@ export default class Auth {
             // anywhere else we don't make more than one request.
             this.refreshTokenRequest = this.api('token', {
                 grant_type: 'refresh_token',
-                refresh_token: (_c = this.user) === null || _c === void 0 ? void 0 : _c.tokenManager.refreshToken
+                refresh_token: (_c = this.user) === null || _c === void 0 ? void 0 : _c.tokenManager.refreshToken,
             }).then(({ id_token: idToken, refresh_token: refreshToken }) => {
                 // Merge the new data with the old data and save it locally.
                 return this.persistSession({
                     ...this.user,
                     // Rename the data names to match the ones used in the app.
-                    tokenManager: { idToken, refreshToken, expiresAt }
+                    tokenManager: { idToken, refreshToken, expiresAt },
                 });
             });
             await this.refreshTokenRequest;
@@ -239,7 +242,7 @@ export default class Auth {
         const { idToken, refreshToken } = await this.api('signUp', {
             email,
             password,
-            returnSecureToken: true
+            returnSecureToken: true,
         });
         // Get the user profile and persists the session.
         await this.fetchProfile({ idToken, refreshToken, expiresAt });
@@ -255,7 +258,7 @@ export default class Auth {
         const { idToken, refreshToken } = await this.api('signInWithPassword', {
             email,
             password,
-            returnSecureToken: true
+            returnSecureToken: true,
         });
         // Get the user profile and persists the session.
         await this.fetchProfile({ idToken, refreshToken, expiresAt });
