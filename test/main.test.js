@@ -114,7 +114,7 @@ describe('Auth', () => {
 						email: 'test@example.com',
 						tokenManager: {
 							idToken: 'idTokenString',
-							expiresAt: Date.now() - 3600 * 1000 // one hour ago.
+							expiresAt: Date.now() - 3600 * 1000 // One hour ago.
 						}
 					})
 				);
@@ -122,7 +122,7 @@ describe('Auth', () => {
 				const auth = new Auth({ apiKey: 'key' });
 
 				// Await for the second update to happen.
-				// the first one is from local storage.
+				// The first one is from local storage.
 				await new Promise(resolve => {
 					auth.listen(resolve);
 				});
@@ -166,10 +166,10 @@ describe('Auth', () => {
 			expect(fetch.mock.calls.length).toEqual(0);
 		});
 
-		test('Signs out a previously signed in user when their token has expired', async () => {
+		test('Signs-out a previously signed-in user when their token has expired', async () => {
 			fetch.mockResponse('{"error": {"message": "TOKEN_EXPIRED"}}', { status: 403 });
 
-			// Previously signed in user
+			// Previously signed-in user
 			localStorage.setItem(
 				'Auth:User:key:default',
 				JSON.stringify({
@@ -186,7 +186,7 @@ describe('Auth', () => {
 			// First call to the listener will be done after reading the local storage.
 			// After that a request to update the user data will be made, and it will return
 			// the fetch error "TOKEN_EXPIRED", the constructor will catch that, then
-			// sign out the user and call the listener a second time.
+			// sign-out the user and call the listener a second time.
 			let calls = 0;
 			const userData = await new Promise(resolve => {
 				auth.listen(user => {
@@ -199,10 +199,10 @@ describe('Auth', () => {
 			expect(userData).toBe(null);
 		});
 
-		test('Signs out a previously signed in user when their token is invalid', async () => {
+		test('Signs-out a previously signed-in user when their token is invalid', async () => {
 			fetch.mockResponse('{"error": {"message": "INVALID_ID_TOKEN"}}', { status: 403 });
 
-			// Previously signed in user
+			// Previously signed-in user
 			localStorage.setItem(
 				'Auth:User:key:default',
 				JSON.stringify({
@@ -219,7 +219,7 @@ describe('Auth', () => {
 			// First call to the listener will be done after reading the local storage.
 			// After that a request to update the user data will be made, and it will return
 			// the fetch error "INVALID_ID_TOKEN", the constructor will catch that, then
-			// sign out the user and call the listener a second time.
+			// sign-out the user and call the listener a second time.
 			let calls = 0;
 			const userData = await new Promise(resolve => {
 				auth.listen(user => {
@@ -382,7 +382,7 @@ describe('Auth', () => {
 
 		test("Doesn't make any requests when the user is not signed-in", async () => {
 			// The constructor makes some requests.
-			// We have to mock them for this not to throw
+			// We must mock them, to prevent a throw
 			fetch.mockResponse('{}');
 
 			try {

@@ -66,14 +66,15 @@ export default class Auth {
 		// we need to check if this environment supports `addEventListener` on the window.
 		'addEventListener' in window &&
 			window.addEventListener('storage', e => {
-				// This code will run if localStorage for this user
-				// data was updated from a different browser window.
+				// This code will run if the local storage for this user
+				// was updated from a different browser window.
 				if (e.key !== this.sKey('User')) return;
 				this.setState(JSON.parse(e.newValue), false);
 			});
 	}
 
 	/**
+	 * Emits an event and triggers all the listeners.
 	 * Emits an event and triggers all of the listeners.
 	 * @param {string} name Name of the event to trigger.
 	 * @param {any} data Data you want to pass to the event listeners.
@@ -104,8 +105,8 @@ export default class Auth {
 	}
 
 	/**
-	 * Makes a post request to a specific endpoint and returns the response.
 	 * @param {string} endpoint Name of the endpoint.
+	 * Makes post request to a specific endpoint and return the response.
 	 * @param {any} request Body to pass to the request.
 	 * @private
 	 */
@@ -122,7 +123,7 @@ export default class Auth {
 			let data = await response.json();
 
 			// If the response returned an error, try to get a Firebase error code/message.
-			// Sometimes the error codes are joined with an explanation, we don't need that(its a bug).
+			// Sometimes the error codes are joined with an explanation, we don't need that.
 			// So we remove the unnecessary part.
 			if (!response.ok) {
 				const code = data.error.message.replace(/ ?: [\w ,.'"()]+$/, '');
@@ -149,7 +150,7 @@ export default class Auth {
 	/**
 	 * Updates the user data in localStorage.
 	 * @param {Object} userData New user data.
-	 * @param {boolean} [updateStorage = true] Check whether to update localStorage or not.
+	 * @param {boolean} [persist = true] Whether to update local storage or not.
 	 * @private
 	 */
 	async setState(userData, persist = true, emit = true) {
@@ -200,7 +201,7 @@ export default class Auth {
 	}
 
 	/**
-	 * Uses native fetch, but adds authorization headers, otherwise, the API is exactly the same as native fetch.
+	 * Uses native fetch but adds authorization headers, otherwise the API is exactly the same as native fetch.
 	 * @param {Request|Object|string} resource A request to send. It can be a resource or an options object.
 	 * @param {Object} init An options object.
 	 */
@@ -245,8 +246,8 @@ export default class Auth {
 		const { provider, oauthScope, context, linkAccount } =
 			typeof options === 'string' ? { provider: options } : options;
 
-		// Make sure the user is logged in when an "account link" was requested.
 		linkAccount && (await this.enforceAuth());
+		// Makes sure the user is signed-in when an "account link" was requested.
 
 		// Get the url and other data necessary for the authentication.
 		const { authUri, sessionId } = await this.api('createAuthUri', {
@@ -261,7 +262,7 @@ export default class Auth {
 		// Is required to finish the auth flow, I believe this is used to mitigate CSRF attacks.
 		// (No docs on this...)
 		await this.storage.set(this.sKey('SessionId'), sessionId);
-		// Save if this is a fresh log-in or a "link account" request.
+		// Save if this is a fresh signed-in or a "link account" request.
 		linkAccount && (await this.storage.set(this.sKey('LinkAccount'), true));
 
 		// Finally - redirect the page to the auth endpoint.
@@ -279,7 +280,6 @@ export default class Auth {
 		const sessionId = await this.storage.get(this.sKey('SessionId'));
 		// Get the indication if this was a "link account" request.
 		const linkAccount = await this.storage.get(this.sKey('LinkAccount'));
-
 		// Check for the edge case in which the user signed-out
 		// before completing the linkAccount request.
 		if (linkAccount && !this.user) throw Error('Request to "Link account" was made, but user is no longer signed-in');
@@ -363,7 +363,8 @@ export default class Auth {
 	/**
 	 * Sends an out-of-band confirmation code for an account.
 	 * It can be used to reset a password, to verify an email address and send a sign-in email link.
-	 * The email argument is not needed if verifying an email (the argument is ignored). Otherwise, it is required.
+	 * The `email` argument is not needed only when verifying an email (In that case it will be completely ignored, even if specified), otherwise it is required.
+	 * Can be used to reset a password, to verify an email address and send a Sign-in email link.
 	 * @param {'PASSWORD_RESET'|'VERIFY_EMAIL'|'EMAIL_SIGNIN'} requestType The type of out-of-band (OOB) code to send.
 	 * @param {string} [email] When the `requestType` is `PASSWORD_RESET` or `EMAIL_SIGNIN` you need to provide an email address.
 	 * @returns {Promise}
@@ -405,9 +406,9 @@ export default class Auth {
 	}
 
 	/**
-	 * Gets the user data from the server, and updates the local caches.
 	 * @param {Object} [tokenManager] Only when not signed-in.
 	 * @throws Will throw if the user is not signed-in.
+	 * Gets the user data from the server and updates the local caches.
 	 */
 	async fetchProfile(tokenManager = this.user && this.user.tokenManager) {
 		if (!tokenManager) await this.enforceAuth();
@@ -421,9 +422,9 @@ export default class Auth {
 	}
 
 	/**
-	 * Updates the user's profile.
 	 * @param {Object} newData An object with the new data.
 	 * @throws Will throw if the user is not signed-in.
+	 * Update user's profile.
 	 */
 	async updateProfile(newData) {
 		await this.enforceAuth();
